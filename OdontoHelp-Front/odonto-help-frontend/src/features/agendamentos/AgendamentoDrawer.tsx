@@ -7,7 +7,7 @@ import { Close, CalendarMonthOutlined, WarningAmberOutlined, EditOutlined } from
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../shared/store/authStore';
 import { useAgendamentoDrawerStore } from './agendamentoStore';
@@ -60,6 +60,7 @@ export default function AgendamentoDrawer({ onSuccess, onError }: Props) {
 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [conflito, setConflito] = useState<string | null>(null);
+  const submitKeyRef = useRef<string | null>(null);
 
   const create = useCreateAgendamento();
   const update = useUpdateAgendamento(editingId ?? 0);
@@ -95,6 +96,7 @@ export default function AgendamentoDrawer({ onSuccess, onError }: Props) {
 
   useEffect(() => {
     if (open) {
+      submitKeyRef.current = null;
       const inicio = draft.dataInicio ?? '';
       const dentistaPadrao =
         draft.dentistaId ??
@@ -143,14 +145,22 @@ export default function AgendamentoDrawer({ onSuccess, onError }: Props) {
   }, [watchedInicio, watchedFim, watchedDentistaId, agendamentosDentista]);
 
   const onSubmit = async (data: AgendamentoFormData) => {
+    if (conflito) {
+      onError('Resolva o conflito de horário antes de salvar');
+      return;
+    }
+    if (!submitKeyRef.current) {
+      submitKeyRef.current = crypto.randomUUID();
+    }
     try {
       if (isNew) {
-        await create.mutateAsync(data);
+        await create.mutateAsync({ data, idempotencyKey: submitKeyRef.current });
         onSuccess('Agendamento criado com sucesso!');
       } else {
         await update.mutateAsync({ dataInicio: data.dataInicio, dataFim: data.dataFim, observacoes: data.observacoes });
         onSuccess('Agendamento atualizado com sucesso!');
       }
+      submitKeyRef.current = null;
       clearDraft();
     } catch (e: any) {
       onError(getApiErrorMessage(e, 'Erro ao salvar agendamento'));
@@ -364,13 +374,13 @@ export default function AgendamentoDrawer({ onSuccess, onError }: Props) {
             )}
 
             {isNew && (
-              <Button variant="contained" disabled={loading} onClick={handleSubmit(onSubmit)}>
+              <Button variant="contained" disabled={loading || !!conflito} onClick={handleSubmit(onSubmit)}>
                 {loading ? 'Salvando...' : 'Agendar'}
               </Button>
             )}
 
             {isEdit && (
-              <Button variant="contained" disabled={loading} onClick={handleSubmit(onSubmit)}>
+              <Button variant="contained" disabled={loading || !!conflito} onClick={handleSubmit(onSubmit)}>
                 {loading ? 'Salvando...' : 'Salvar'}
               </Button>
             )}

@@ -16,6 +16,7 @@ import com.OdontoHelpBackend.infra.exception.NotFoundException;
 import com.OdontoHelpBackend.repository.Consulta.AgendamentoRepository;
 import com.OdontoHelpBackend.service.Usuario.DentistaService;
 import com.OdontoHelpBackend.service.Usuario.PacienteService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
@@ -61,6 +62,7 @@ public class AgendamentoService {
                 .map(agendamentoMapper::toResponse);
     }
 
+    @Transactional
     public AgendamentoResponseDTO criar(AgendamentoRequestDTO dto) {
         var paciente = pacienteService.buscarEntidadePorId(dto.pacienteId());
         var dentista = dentistaService.buscarEntidadePorId(dto.dentistaId());
@@ -156,13 +158,13 @@ public class AgendamentoService {
 
 
     private void validarConflitoHorario(Agendamento agendamento) {
-        boolean conflito = agendamentoRepository
-                .existsByDentistaIdAndStatusNotAndDataInicioLessThanAndDataFimGreaterThan(
-                        agendamento.getDentista().getId(),
-                        StatusConsulta.CANCELADO,
-                        agendamento.getDataFim(),
-                        agendamento.getDataInicio()
-                );
+        Long dentistaId = agendamento.getDentista().getId();
+        boolean conflito = agendamento.getId() == null
+                ? agendamentoRepository.existsByDentistaIdAndStatusNotAndDataInicioLessThanAndDataFimGreaterThan(
+                        dentistaId, StatusConsulta.CANCELADO, agendamento.getDataFim(), agendamento.getDataInicio())
+                : agendamentoRepository.existsByDentistaIdAndIdNotAndStatusNotAndDataInicioLessThanAndDataFimGreaterThan(
+                        dentistaId, agendamento.getId(), StatusConsulta.CANCELADO,
+                        agendamento.getDataFim(), agendamento.getDataInicio());
         if (conflito)
             throw new ConflictException("Dentista já possui agendamento neste horário");
     }

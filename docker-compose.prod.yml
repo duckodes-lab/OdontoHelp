@@ -41,7 +41,10 @@ services:
         VITE_API_URL: ${VITE_API_URL:?Defina VITE_API_URL (URL publica da API, ex. https://api.seudominio.com)}
 
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: odontohelp-caddy:local
     container_name: odontohelp-caddy
     restart: unless-stopped
     depends_on:

@@ -1,5 +1,7 @@
 package com.OdontoHelpBackend.infra.security;
 
+import com.OdontoHelpBackend.infra.security.idempotency.IdempotencyFilter;
+import com.OdontoHelpBackend.infra.security.ratelimit.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -29,9 +31,14 @@ import java.util.List;
 public class SecurityConfig {
 
     private final SecurityFilter securityFilter;
+    private final RateLimitFilter rateLimitFilter;
+    private final IdempotencyFilter idempotencyFilter;
 
     @Value("${cors.allowed-origins}")
     private List<String> allowedOrigins;
+
+    @Value("${springdoc.swagger-ui.enabled:true}")
+    private boolean swaggerEnabled;
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
@@ -75,17 +82,19 @@ public class SecurityConfig {
                             );
                         })
                 )
-                .authorizeHttpRequests(auth -> auth
-                            .requestMatchers("/auth/**").permitAll()
-                            .requestMatchers(
-                                    "/swagger-ui.html",
-                                    "/swagger-ui/**",
-                                    "/v3/api-docs",
-                                    "/v3/api-docs/**",
-                                    "/swagger-resources/**",
-                                    "/webjars/**"
-                            ).permitAll()
-                            .requestMatchers("/usuarios", "/usuarios/**").hasRole("ADMIN")
+                .authorizeHttpRequests(auth -> {
+                            auth.requestMatchers("/auth/**").permitAll();
+                            if (swaggerEnabled) {
+                                auth.requestMatchers(
+                                        "/swagger-ui.html",
+                                        "/swagger-ui/**",
+                                        "/v3/api-docs",
+                                        "/v3/api-docs/**",
+                                        "/swagger-resources/**",
+                                        "/webjars/**"
+                                ).permitAll();
+                            }
+                            auth.requestMatchers("/usuarios", "/usuarios/**").hasRole("ADMIN")
 
                             // Dentistas
                             .requestMatchers(HttpMethod.GET,   "/dentistas", "/dentistas/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
@@ -120,9 +129,14 @@ public class SecurityConfig {
                             .requestMatchers("/atendimentos", "/atendimentos/**").hasAnyRole("ADMIN", "DENTISTA")
                             .requestMatchers("/planos-tratamento", "/planos-tratamento/**").hasAnyRole("ADMIN", "DENTISTA")
 
-                            .anyRequest().authenticated()
+                            .anyRequest().authenticated();
+                })
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.sameOrigin())
+                        .contentTypeOptions(Customizer.withDefaults())
                 )
-                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
+                .addFilterBefore(idempotencyFilter, SecurityFilter.class)
+                .addFilterBefore(rateLimitFilter, IdempotencyFilter.class)
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

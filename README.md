@@ -103,3 +103,14 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml down
 | Manter `**/dist/` e `node_modules/` fora do Git | Subir build do front (`dist/`) — o Docker gera na imagem |
 
 Arquivos ignorados: ver [.gitignore](.gitignore).
+
+### VPS Oracle (produção)
+
+Após pentest ou incidente SSH:
+
+1. **[docs/vps-oracle-hardening.md](docs/vps-oracle-hardening.md)** — runbook completo (firewall Oracle, rotação de secrets, SSH)
+2. **Scripts** em `scripts/vps/` — executar na VPS: `audit-ssh.sh`, `rotate-secrets-and-rebuild.sh`, `harden-ssh.sh`
+3. **[docs/security-testing.md](docs/security-testing.md)** — validar rate limit e lockout na API
+4. **[docs/pentest-report-template.md](docs/pentest-report-template.md)** — template de relatório do pentester
+
+Na Oracle Security List: abra **80/443**; restrinja ou feche **22** para `0.0.0.0/0`.

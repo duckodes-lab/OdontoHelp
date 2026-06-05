@@ -1,5 +1,6 @@
 package com.OdontoHelpBackend.service.Auth;
 
+import com.OdontoHelpBackend.infra.exception.AccountLockedException;
 import com.OdontoHelpBackend.infra.exception.InvalidTokenException;
 import com.OdontoHelpBackend.infra.security.JwtService;
 import com.OdontoHelpBackend.infra.security.token.RefreshToken;
@@ -19,9 +20,15 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int LOCK_MINUTES = 15;
 
     private final UsuarioRepository usuarioRepository;
     private final DentistaRepository dentistaRepository;
@@ -38,9 +45,14 @@ public class AuthService {
         if (!usuario.getIsAtivo())
             throw new BadCredentialsException("Credenciais inválidas");
 
-        if (!passwordEncoder.matches(request.senha(), usuario.getSenha()))
-            throw new BadCredentialsException("Credenciais inválidas");
+        verificarBloqueio(usuario);
 
+        if (!passwordEncoder.matches(request.senha(), usuario.getSenha())) {
+            registrarFalhaLogin(usuario);
+            throw new BadCredentialsException("Credenciais inválidas");
+        }
+
+        resetarFalhasLogin(usuario);
         return gerarAuthResponse(usuario);
     }
 
@@ -95,5 +107,28 @@ public class AuthService {
         return dentistaRepository.findByUsuarioId(usuario.getId())
                 .map(Usuario::getId)
                 .orElse(null);
+    }
+
+    private void verificarBloqueio(Usuario usuario) {
+        LocalDateTime lockedUntil = usuario.getLockedUntil();
+        if (lockedUntil == null || !lockedUntil.isAfter(LocalDateTime.now())) return;
+        long retryAfter = Duration.between(LocalDateTime.now(), lockedUntil).getSeconds();
+        throw new AccountLockedException(Math.max(1, retryAfter));
+    }
+
+    private void registrarFalhaLogin(Usuario usuario) {
+        int attempts = usuario.getFailedLoginAttempts() == null ? 0 : usuario.getFailedLoginAttempts();
+        attempts++;
+        usuario.setFailedLoginAttempts(attempts);
+        if (attempts >= MAX_FAILED_ATTEMPTS) {
+            usuario.setLockedUntil(LocalDateTime.now().plusMinutes(LOCK_MINUTES));
+        }
+        usuarioRepository.save(usuario);
+    }
+
+    private void resetarFalhasLogin(Usuario usuario) {
+        usuario.setFailedLoginAttempts(0);
+        usuario.setLockedUntil(null);
+        usuarioRepository.save(usuario);
     }
 }

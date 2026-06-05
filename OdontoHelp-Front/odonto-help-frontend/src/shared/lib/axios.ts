@@ -1,5 +1,11 @@
 import axios from 'axios';
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosError } from 'axios';
+
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    idempotencyKey?: string;
+  }
+}
 import { useAuthStore } from '../store/authStore';
 import { isTokenExpired } from './jwt';
 
@@ -63,6 +69,14 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers = config.headers || {};
     if (!('Content-Type' in config.headers)) config.headers['Content-Type'] = 'application/json';
   }
+
+  if (config.method && !['get', 'head', 'options'].includes(config.method)) {
+    config.headers = config.headers || {};
+    if (!config.headers['Idempotency-Key']) {
+      config.headers['Idempotency-Key'] = config.idempotencyKey ?? crypto.randomUUID();
+    }
+  }
+
   return config;
 });
 
@@ -79,6 +93,8 @@ api.interceptors.response.use(
     if (status === 404) return Promise.reject(new Error('Recurso não encontrado'));
     if (status === 409) return Promise.reject(new Error(message));
     if (status === 422) return Promise.reject(new Error(message));
+    if (status === 423) return Promise.reject(new Error(message || 'Conta temporariamente bloqueada'));
+    if (status === 429) return Promise.reject(new Error(message || 'Muitas tentativas. Aguarde e tente novamente'));
     if (status !== undefined && status >= 500)
       return Promise.reject(new Error('Erro no servidor — tente novamente'));
 
