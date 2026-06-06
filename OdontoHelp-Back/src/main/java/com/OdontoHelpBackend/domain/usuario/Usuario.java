@@ -67,6 +67,9 @@ public class Usuario implements UserDetails {
     @Column(name = "LOCKED_UNTIL")
     private LocalDateTime lockedUntil;
 
+    @Column(name = "ONBOARDING_CONCLUIDO", nullable = false)
+    private Boolean onboardingConcluido = false;
+
     @OneToOne(mappedBy = "usuario", cascade = CascadeType.ALL)
     private Endereco endereco;
 

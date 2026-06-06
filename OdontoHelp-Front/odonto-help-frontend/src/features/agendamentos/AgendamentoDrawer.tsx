@@ -1,7 +1,7 @@
 import {
   Drawer, Box, Typography, IconButton, Divider, TextField,
   Button, Stack, Dialog, DialogTitle, DialogContent, DialogActions,
-  Alert, Autocomplete, CircularProgress,
+  Alert, Autocomplete, Chip, CircularProgress,
 } from '@mui/material';
 import { Close, CalendarMonthOutlined, WarningAmberOutlined, EditOutlined } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
@@ -208,8 +208,9 @@ export default function AgendamentoDrawer({ onSuccess, onError }: Props) {
     }
   };
 
+  const isAvulso = draft.origem === 'AVULSA';
   const loading = create.isPending || update.isPending || atualizarStatusComItens.isPending || iniciarAtendimento.isPending;
-  const fieldsDisabled = isView || !!isFinalStatus;
+  const fieldsDisabled = isView || !!isFinalStatus || isAvulso;
 
   const drawerTitle = isNew ? 'Novo agendamento' : isEdit ? 'Editar agendamento' : 'Agendamento';
 
@@ -248,6 +249,14 @@ export default function AgendamentoDrawer({ onSuccess, onError }: Props) {
                 sx={{ borderRadius: 2, fontSize: '0.8rem' }}>
                 {conflito}
               </Alert>
+            )}
+
+            {isAvulso && (
+              <Chip
+                label="Consulta avulsa"
+                size="small"
+                sx={{ alignSelf: 'flex-start', bgcolor: '#FAEEDA', color: '#854F0B', border: '1px solid #FAC775' }}
+              />
             )}
 
             <Typography variant="overline" sx={{ color: 'text.disabled' }}>Paciente e dentista</Typography>
@@ -328,7 +337,7 @@ export default function AgendamentoDrawer({ onSuccess, onError }: Props) {
 
           {/* Esquerda */}
           <Box>
-            {isView && !isFinalStatus && (
+            {isView && !isFinalStatus && !isAvulso && (
               <Button size="small" color="error" onClick={() => setConfirmCancel(true)} disabled={loading}>
                 Cancelar agendamento
               </Button>
@@ -366,7 +375,7 @@ export default function AgendamentoDrawer({ onSuccess, onError }: Props) {
               </Button>
             )}
 
-            {isView && !isFinalStatus && (
+            {isView && !isFinalStatus && !isAvulso && (
               <Button variant="outlined" startIcon={<EditOutlined sx={{ fontSize: 16 }} />}
                 onClick={setEditMode} size="small">
                 Editar

@@ -83,7 +83,8 @@ public class SecurityConfig {
                         })
                 )
                 .authorizeHttpRequests(auth -> {
-                            auth.requestMatchers("/auth/**").permitAll();
+                            auth.requestMatchers(HttpMethod.POST, "/auth/onboarding/concluir").authenticated()
+                            .requestMatchers("/auth/**").permitAll();
                             if (swaggerEnabled) {
                                 auth.requestMatchers(
                                         "/swagger-ui.html",
@@ -114,6 +115,7 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.POST,  "/pacientes", "/pacientes/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
                             .requestMatchers(HttpMethod.PUT,   "/pacientes", "/pacientes/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
                             .requestMatchers(HttpMethod.PATCH, "/pacientes", "/pacientes/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
+                            .requestMatchers(HttpMethod.DELETE, "/pacientes/*/arquivos/*").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
 
                             // Agendamentos e Dashboard
                             .requestMatchers("/agendamentos", "/agendamentos/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
@@ -126,6 +128,7 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.PATCH, "/procedimentos", "/procedimentos/**").hasAnyRole("ADMIN", "RECEPCAO")
 
                             // Atendimentos e Planos de Tratamento
+                            .requestMatchers(HttpMethod.POST, "/atendimentos/*/arquivos").hasAnyRole("ADMIN", "DENTISTA")
                             .requestMatchers("/atendimentos", "/atendimentos/**").hasAnyRole("ADMIN", "DENTISTA")
                             .requestMatchers("/planos-tratamento", "/planos-tratamento/**").hasAnyRole("ADMIN", "DENTISTA")
 
@@ -135,9 +138,10 @@ public class SecurityConfig {
                         .frameOptions(frame -> frame.sameOrigin())
                         .contentTypeOptions(Customizer.withDefaults())
                 )
-                .addFilterBefore(idempotencyFilter, SecurityFilter.class)
-                .addFilterBefore(rateLimitFilter, IdempotencyFilter.class)
-                .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class);
+                // Todos ancorados em UsernamePasswordAuthenticationFilter (Spring Security 6.4+ exige ordem registrada)
+                .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(idempotencyFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

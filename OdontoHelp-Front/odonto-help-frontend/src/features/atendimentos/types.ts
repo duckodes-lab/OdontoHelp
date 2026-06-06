@@ -1,5 +1,7 @@
 // src/features/atendimentos/types.ts
 
+import type { OrigemAgendamento } from '../../domains/agendamentos/agendamentos.types';
+
 export type StatusAtendimento = 'EM_ANDAMENTO' | 'FINALIZADO';
 
 export const STATUS_ATENDIMENTO_LABELS: Record<StatusAtendimento, string> = {
@@ -50,9 +52,17 @@ export interface ItemAtendimento {
   observacao: string | null;
 }
 
+export interface IniciarAtendimentoAvulsoData {
+  pacienteId: number;
+  dentistaId?: number;
+  observacoesGerais?: string;
+  motivo?: string;
+}
+
 export interface Atendimento {
   id: number;
   agendamentoId: number;
+  agendamentoOrigem?: OrigemAgendamento;
   dentistaId: number;
   dentistaNome: string;
   pacienteId: number;

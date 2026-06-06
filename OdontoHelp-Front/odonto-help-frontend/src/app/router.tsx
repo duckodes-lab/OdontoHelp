@@ -1,7 +1,7 @@
 // src/app/router.tsx
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import AppShell from '../shared/components/AppShell';
-import { PrivateRoute, RoleRoute } from '../shared/components/RouteGuards';
+import { NotFoundRedirect, PrivateRoute, RoleRoute } from '../shared/components/RouteGuards';
 import LoginPage from '../features/auth/LoginPage';
 import ForgotPasswordPage from '../features/auth/ForgotPasswordPage';
 import ResetPasswordPage from '../features/auth/ResetPasswordPage';
@@ -64,13 +64,16 @@ const router = createBrowserRouter([
               { path: 'dentistas/:id', element: <DentistasPage /> },
             ],
           },
+
+          { path: '*', element: <NotFoundRedirect /> },
         ],
       },
+      { path: '*', element: <NotFoundRedirect /> },
     ],
   },
 
   // ─── fallback ────────────────────────────────────────────────────────────────
-  { path: '*', element: <Navigate to="/" replace /> },
+  { path: '*', element: <NotFoundRedirect /> },
 ]);
 
 export default router;

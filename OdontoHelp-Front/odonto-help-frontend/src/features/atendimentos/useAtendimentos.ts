@@ -4,7 +4,7 @@ import { atendimentoService } from './atendimentoService';
 import { AGENDAMENTOS_KEY } from '../../domains/agendamentos';
 import { ODONTOGRAMA_KEY } from '../odontograma/useOdontograma';
 import { PLANO_KEY } from '../planoTratamento/usePlanoTratamento';
-import type { AtendimentoUpdateData, AtendimentoFiltros } from './types';
+import type { AtendimentoUpdateData, AtendimentoFiltros, IniciarAtendimentoAvulsoData } from './types';
 
 export const ATENDIMENTOS_KEY = 'atendimentos';
 
@@ -37,6 +37,18 @@ export function useAtendimentosPorDentista(
     queryFn: () => atendimentoService.listarPorDentista(dentistaId, page, 10, filtros),
     enabled: true, // ADMIN (dentistaId null) também carrega
     placeholderData: (prev) => prev,
+  });
+}
+
+export function useIniciarAtendimentoAvulso() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: IniciarAtendimentoAvulsoData) => atendimentoService.iniciarAvulso(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [ATENDIMENTOS_KEY] });
+      qc.invalidateQueries({ queryKey: [AGENDAMENTOS_KEY] });
+      qc.invalidateQueries({ queryKey: [ODONTOGRAMA_KEY] });
+    },
   });
 }
 

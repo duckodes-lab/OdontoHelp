@@ -18,6 +18,7 @@ public class IdempotencyService {
     @Value("${app.idempotency.ttl-hours:24}")
     private int ttlHours;
 
+    @Transactional
     public Optional<IdempotencyKey> findValid(String key) {
         cleanupExpired();
         return repository.findById(key)

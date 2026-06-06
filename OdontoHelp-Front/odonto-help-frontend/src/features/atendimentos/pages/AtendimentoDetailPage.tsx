@@ -8,7 +8,7 @@ import {
 import {
   Close, MedicalServicesOutlined, DeleteOutlined,
 } from '@mui/icons-material';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   useAtendimento, useUpdateAtendimento, useFinalizarAtendimento,
@@ -27,6 +27,8 @@ import type { ItemAtendimento } from '../types';
 import { useOdontograma } from '../../odontograma/useOdontograma';
 import type { OdontogramaMap } from '../../odontograma/types';
 import { useItensPlanoPendentes } from '../../planoTratamento/usePlanoTratamento';
+import AtendimentoAnexosSection from '../../arquivos/AtendimentoAnexosSection';
+import PlanoPendenteSugestao from '../PlanoPendenteSugestao';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -76,6 +78,7 @@ export default function AtendimentoDetailPage() {
   const [selectedDentes, setSelectedDentes] = useState<number[]>([]);
   const [modalDentes, setModalDentes] = useState(false);
   const [drawerProcedimento, setDrawerProcedimento] = useState(false);
+  const [drawerSugestao, setDrawerSugestao] = useState<ItemPlano | null>(null);
   const [items, setItems] = useState<ItemAtendimento[]>([]);
   const [itemParaExcluir, setItemParaExcluir] = useState<number | null>(null);
   const [toast, setToast] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({
@@ -92,6 +95,18 @@ export default function AtendimentoDetailPage() {
     }
   }, [atendimento]);
 
+  const sugestoesPlano = useMemo(() => {
+    if (!itensPendentes?.length || selectedDentes.length === 0) return [];
+    const jaAdicionados = new Set(
+      items.map((item) => `${item.numeroDente}-${item.procedimentoId}`),
+    );
+    return itensPendentes.filter(
+      (item) =>
+        selectedDentes.includes(item.numeroDente) &&
+        !jaAdicionados.has(`${item.numeroDente}-${item.procedimentoId}`),
+    );
+  }, [itensPendentes, selectedDentes, items]);
+
   if (!atendimento) {
     if (isLoading) {
       return (
@@ -107,6 +122,7 @@ export default function AtendimentoDetailPage() {
   }
 
   const isFinalizado = atendimento.status === 'FINALIZADO';
+  const totalPendentesPlano = itensPendentes?.length ?? 0;
 
   // Mapa local — mescla servidor + itens ainda não salvos para feedback visual imediato
   const mapaLocal: OdontogramaMap = {
@@ -140,7 +156,20 @@ export default function AtendimentoDetailPage() {
   const handleAddProcedimento = (novosItens: ItemAtendimento[]) => {
     setItems((prev) => [...prev, ...novosItens]);
     setSelectedDentes([]);
+    setDrawerSugestao(null);
     setDrawerProcedimento(false);
+  };
+
+  const handleRegistrarDoPlano = (item: ItemPlano) => {
+    setSelectedDentes([item.numeroDente]);
+    setDrawerSugestao(item);
+    setDrawerProcedimento(true);
+  };
+
+  const fecharDrawerProcedimento = () => {
+    setDrawerProcedimento(false);
+    setDrawerSugestao(null);
+    setSelectedDentes([]);
   };
 
   const buildPayloadItens = () =>
@@ -362,7 +391,20 @@ export default function AtendimentoDetailPage() {
               {isFinalizado && (
                 <Alert severity="info">Atendimento finalizado — apenas leitura.</Alert>
               )}
-              <TextField label="ID Agendamento" value={atendimento.agendamentoId} fullWidth disabled />
+              {atendimento.agendamentoOrigem === 'AVULSA' ? (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip
+                    label="Atendimento avulso"
+                    size="small"
+                    sx={{ bgcolor: '#FAEEDA', color: '#854F0B', border: '1px solid #FAC775' }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    Sem agenda prévia · agendamento #{atendimento.agendamentoId}
+                  </Typography>
+                </Stack>
+              ) : (
+                <TextField label="ID Agendamento" value={atendimento.agendamentoId} fullWidth disabled />
+              )}
               <TextField
                 label="Hora de início"
                 type="datetime-local"
@@ -397,6 +439,13 @@ export default function AtendimentoDetailPage() {
                   </Stack>
                 </Box>
               )}
+              <AtendimentoAnexosSection
+                pacienteId={atendimento.pacienteId}
+                atendimentoId={atendimento.id}
+                somenteLeitura={isFinalizado}
+                onSuccess={(msg) => setToast({ open: true, msg, severity: 'success' })}
+                onError={(msg) => setToast({ open: true, msg, severity: 'error' })}
+              />
             </Stack>
           </TabPanel>
 
@@ -415,16 +464,27 @@ export default function AtendimentoDetailPage() {
                   <Button
                     size="small"
                     variant="contained"
-                    onClick={() => setDrawerProcedimento(true)}
+                    onClick={() => {
+                      setDrawerSugestao(null);
+                      setDrawerProcedimento(true);
+                    }}
                     sx={{ ml: 'auto' }}
                   >
                     Adicionar procedimento
                   </Button>
                 </Box>
               )}
+              {!isFinalizado && (
+                <PlanoPendenteSugestao
+                  itens={sugestoesPlano}
+                  onRegistrar={handleRegistrarDoPlano}
+                />
+              )}
               <Typography variant="caption" color="text.secondary">
                 As situações dos dentes são atualizadas automaticamente ao finalizar o atendimento.
-                Dentes com borda laranja têm plano de tratamento pendente.
+                Dentes com borda laranja têm plano de tratamento pendente
+                {totalPendentesPlano > 0 && ` (${totalPendentesPlano} item${totalPendentesPlano === 1 ? '' : 's'} pendente${totalPendentesPlano === 1 ? '' : 's'})`}.
+                Selecione o dente para ver sugestões do plano.
               </Typography>
               <OdontogramaVisual
                 pacienteId={atendimento.pacienteId}
@@ -553,7 +613,8 @@ export default function AtendimentoDetailPage() {
       <AtendimentoProcedimentoDrawer
         open={drawerProcedimento}
         dentes={selectedDentes}
-        onClose={() => { setDrawerProcedimento(false); setSelectedDentes([]); }}
+        sugestaoPlano={drawerSugestao}
+        onClose={fecharDrawerProcedimento}
         onAddProcedimento={handleAddProcedimento}
       />
 

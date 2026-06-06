@@ -13,6 +13,7 @@ import com.OdontoHelpBackend.dto.auth.RefreshRequest;
 import com.OdontoHelpBackend.dto.auth.UsuarioResumoResponse;
 import com.OdontoHelpBackend.domain.usuario.enums.PerfilUsuario;
 import com.OdontoHelpBackend.repository.Usuario.DentistaRepository;
+import com.OdontoHelpBackend.infra.util.EmailNormalizer;
 import com.OdontoHelpBackend.repository.Usuario.UsuarioRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +40,8 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
-        Usuario usuario = usuarioRepository.findByEmail(request.email())
+        String email = EmailNormalizer.normalize(request.email());
+        Usuario usuario = usuarioRepository.findByEmail(email)
                 .orElseThrow(() -> new BadCredentialsException("Credenciais inválidas"));
 
         if (!usuario.getIsAtivo())
@@ -79,6 +81,12 @@ public class AuthService {
         }
     }
 
+    @Transactional
+    public void marcarOnboardingConcluido(Usuario usuario) {
+        usuario.setOnboardingConcluido(true);
+        usuarioRepository.save(usuario);
+    }
+
     private AuthResponse gerarAuthResponse(Usuario usuario) {
         String accessToken = jwtService.gerarAccessToken(usuario);
         Long dentistaId = resolverDentistaId(usuario);
@@ -97,7 +105,8 @@ public class AuthService {
                         usuario.getNome(),
                         usuario.getEmail(),
                         usuario.getPerfil().name(),
-                        dentistaId
+                        dentistaId,
+                        Boolean.TRUE.equals(usuario.getOnboardingConcluido())
                 )
         );
     }

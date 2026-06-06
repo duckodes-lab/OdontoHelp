@@ -3,6 +3,8 @@ package com.OdontoHelpBackend.controller.Clinico;
 import com.OdontoHelpBackend.domain.Clinico.Enums.StatusAtendimento;
 import com.OdontoHelpBackend.domain.usuario.Usuario;
 import com.OdontoHelpBackend.dto.Clinica.Request.AtendimentoUpdateDTO;
+import com.OdontoHelpBackend.dto.Clinica.Request.IniciarAtendimentoAvulsoRequestDTO;
+import com.OdontoHelpBackend.dto.Clinica.Request.MarcarItemCobradoRequestDTO;
 import com.OdontoHelpBackend.dto.Clinica.Request.BaixaPlanoManualRequestDTO;
 import com.OdontoHelpBackend.dto.Clinica.Response.AtendimentoResponseDTO;
 import com.OdontoHelpBackend.dto.Clinica.Response.AtendimentoUpdateResultDTO;
@@ -13,6 +15,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import java.net.URI;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
@@ -66,6 +70,18 @@ public class AtendimentoController {
         return ResponseEntity.ok(
                 atendimentoService.listarTodos(nomePaciente, dataInicio, dataFim, status, pageable, usuario)
         );
+    }
+
+    @PostMapping("/iniciar-avulso")
+    public ResponseEntity<AtendimentoResponseDTO> iniciarAvulso(
+            @RequestBody @Valid IniciarAtendimentoAvulsoRequestDTO dto) {
+
+        Usuario usuario = (Usuario) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        AtendimentoResponseDTO atendimento = atendimentoService.iniciarAtendimentoAvulso(dto, usuario);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .location(URI.create("/atendimentos/" + atendimento.id()))
+                .body(atendimento);
     }
 
     @PutMapping("/{id}")

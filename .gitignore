@@ -44,6 +44,9 @@
 # Cursor (local)
 .cursor/
 
+# Documentação local (notas, checklists, runbooks — não versionar)
+docs/
+
 # --- Sistema operacional ---
 .DS_Store
 .DS_Store?

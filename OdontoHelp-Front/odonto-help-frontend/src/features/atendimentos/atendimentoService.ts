@@ -4,6 +4,7 @@ import type {
   AtendimentoUpdateData,
   AtendimentoUpdateResult,
   AtendimentoFiltros,
+  IniciarAtendimentoAvulsoData,
 } from './types';
 import type { SliceResponse } from '../dentistas/types';
 
@@ -43,6 +44,16 @@ export const atendimentoService = {
       : `${BASE_ATENDIMENTOS}?${query}`;
 
     const { data } = await api.get(url);
+    return data;
+  },
+
+  iniciarAvulso: async (payload: IniciarAtendimentoAvulsoData): Promise<Atendimento> => {
+    const { data } = await api.post(`${BASE_ATENDIMENTOS}/iniciar-avulso`, {
+      pacienteId: payload.pacienteId,
+      dentistaId: payload.dentistaId ?? null,
+      observacoesGerais: payload.observacoesGerais ?? null,
+      motivo: payload.motivo ?? null,
+    });
     return data;
   },
 

@@ -3,6 +3,7 @@ package com.OdontoHelpBackend.service.Clinico;
 import com.OdontoHelpBackend.Mapper.AtendimentoMapper;
 import com.OdontoHelpBackend.domain.Clinico.Atendimento;
 import com.OdontoHelpBackend.domain.Clinico.Enums.StatusAtendimento;
+import com.OdontoHelpBackend.domain.Clinico.Enums.StatusCobrancaItem;
 import com.OdontoHelpBackend.domain.Clinico.Enums.StatusItemPlano;
 import com.OdontoHelpBackend.domain.Clinico.ItemAtendimento;
 import com.OdontoHelpBackend.domain.Clinico.ItemPlanoDeTratamento;
@@ -13,8 +14,10 @@ import com.OdontoHelpBackend.domain.usuario.Usuario;
 import com.OdontoHelpBackend.domain.usuario.enums.PerfilUsuario;
 import com.OdontoHelpBackend.dto.Clinica.Request.AtendimentoUpdateDTO;
 import com.OdontoHelpBackend.dto.Clinica.Request.BaixaPlanoManualRequestDTO;
+import com.OdontoHelpBackend.dto.Clinica.Request.IniciarAtendimentoAvulsoRequestDTO;
 import com.OdontoHelpBackend.dto.Clinica.Request.IniciarAtendimentoRequestDTO;
 import com.OdontoHelpBackend.dto.Clinica.Request.ItemAtendimentoRequestDTO;
+import com.OdontoHelpBackend.dto.Clinica.Request.MarcarItemCobradoRequestDTO;
 import com.OdontoHelpBackend.dto.Clinica.Response.AtendimentoResponseDTO;
 import com.OdontoHelpBackend.dto.Clinica.Response.AtendimentoUpdateResultDTO;
 import com.OdontoHelpBackend.dto.Clinica.Response.ItemPlanoResponseDTO;
@@ -28,6 +31,7 @@ import com.OdontoHelpBackend.repository.Clinico.ItemPlanoDeTratamentoRepository;
 import com.OdontoHelpBackend.repository.Consulta.AgendamentoRepository;
 import com.OdontoHelpBackend.service.Consulta.AgendamentoService;
 import com.OdontoHelpBackend.service.Usuario.DentistaService;
+import com.OdontoHelpBackend.service.Usuario.PacienteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -45,11 +49,14 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class AtendimentoService {
 
+    private static final int DURACAO_SLOT_AVULSO_MINUTOS = 30;
+
     private final AtendimentoRepository atendimentoRepository;
     private final AgendamentoRepository agendamentoRepository;
     private final AtendimentoMapper atendimentoMapper;
     private final AgendamentoService agendamentoService;
     private final DentistaService dentistaService;
+    private final PacienteService pacienteService;
     private final ProcedimentoService procedimentoService;
     private final OdontogramaService odontogramaService;
     private final ItemPlanoDeTratamentoRepository itemPlanoRepository;
@@ -129,6 +136,29 @@ public class AtendimentoService {
     }
 
     @Transactional
+    public AtendimentoResponseDTO iniciarAtendimentoAvulso(IniciarAtendimentoAvulsoRequestDTO dto,
+                                                           Usuario usuarioLogado) {
+        if (usuarioLogado.getPerfil() == PerfilUsuario.RECEPCAO)
+            throw new AcessoNegadoException("Recepcionista não pode iniciar atendimentos clínicos");
+
+        var paciente = pacienteService.buscarEntidadePorId(dto.pacienteId());
+        if (!paciente.getIsAtivo())
+            throw new BusinessException("Paciente inativo não pode realizar atendimentos");
+
+        Dentista dentista = resolverDentistaAvulso(usuarioLogado, dto.dentistaId());
+        if (!dentista.getIsAtivo())
+            throw new BusinessException("Dentista inativo não pode realizar atendimentos");
+
+        String observacoesAgendamento = montarObservacoesAvulso(dto.motivo());
+        Agendamento agendamento = Agendamento.criarAvulso(
+                paciente, dentista, observacoesAgendamento, DURACAO_SLOT_AVULSO_MINUTOS);
+        agendamento = agendamentoRepository.save(agendamento);
+
+        IniciarAtendimentoRequestDTO iniciarDto = new IniciarAtendimentoRequestDTO(dto.observacoesGerais());
+        return iniciarAtendimento(agendamento.getId(), iniciarDto, usuarioLogado);
+    }
+
+    @Transactional
     public AtendimentoUpdateResultDTO atualizar(Long id, AtendimentoUpdateDTO dto, Usuario usuarioLogado) {
         Atendimento atendimento = buscarEntidadePorId(id);
         validarPropriedadeAtendimento(atendimento, usuarioLogado);
@@ -143,6 +173,8 @@ public class AtendimentoService {
             atendimento.getItens().forEach(i ->
                     existentes.add(chave(i.getNumeroDente(), i.getProcedimento().getId())));
 
+            List<ItemAtendimento> novosItens = new ArrayList<>();
+
             for (ItemAtendimentoRequestDTO itemDto : dto.itens()) {
                 String key = chave(itemDto.numeroDente(), itemDto.procedimentoId());
                 if (existentes.contains(key)) continue;
@@ -150,9 +182,7 @@ public class AtendimentoService {
                 ItemAtendimento item = atendimentoMapper.itemToEntity(itemDto);
                 item.definirProcedimentoCobravel(procedimentoService.buscarEntidadePorId(itemDto.procedimentoId()));
                 atendimento.adicionarItem(item);
-
-                odontogramaService.registrarPorItemAtendimento(
-                        atendimento.getPaciente(), item, atendimento, usuarioLogado);
+                novosItens.add(item);
 
                 baixaAutomatica(atendimento, item);
                 baixaManual.addAll(buscarItensBaixaManual(
@@ -162,6 +192,11 @@ public class AtendimentoService {
                 ));
 
                 existentes.add(key);
+            }
+
+            if (!novosItens.isEmpty()) {
+                odontogramaService.registrarPorItensAtendimento(
+                        atendimento.getPaciente(), novosItens, atendimento, usuarioLogado);
             }
         }
 
@@ -197,6 +232,24 @@ public class AtendimentoService {
         atendimento.getItens().remove(item);
         itemAtendimentoRepository.delete(item);
         atendimentoRepository.save(atendimento);
+    }
+
+    @Transactional
+    public void marcarItemCobrado(Long itemId, MarcarItemCobradoRequestDTO dto, Usuario usuarioLogado) {
+        if (usuarioLogado.getPerfil() != PerfilUsuario.ADMIN
+                && usuarioLogado.getPerfil() != PerfilUsuario.RECEPCAO) {
+            throw new AcessoNegadoException("Sem permissao para marcar cobranca");
+        }
+        ItemAtendimento item = itemAtendimentoRepository.findById(itemId)
+                .orElseThrow(() -> new NotFoundException("Item de atendimento nao encontrado"));
+        if (item.getStatusCobranca() == StatusCobrancaItem.COBRADO
+                || item.getStatusCobranca() == StatusCobrancaItem.ENVIADO) {
+            throw new ConflictException("Item ja vinculado a cobranca");
+        }
+        item.setStatusCobranca(StatusCobrancaItem.ENVIADO);
+        item.setFinanceiroCobrancaId(String.valueOf(dto.financeiroCobrancaId()));
+        item.setCobrancaEnviadaEm(LocalDateTime.now());
+        itemAtendimentoRepository.save(item);
     }
 
     @Transactional
@@ -285,5 +338,21 @@ public class AtendimentoService {
             return dentistaLogado;
         }
         return agendamento.getDentista();
+    }
+
+    private Dentista resolverDentistaAvulso(Usuario usuarioLogado, Long dentistaId) {
+        if (usuarioLogado.getPerfil() == PerfilUsuario.DENTISTA) {
+            return dentistaService.buscarEntidadePorUsuarioId(usuarioLogado.getId());
+        }
+        if (dentistaId == null)
+            throw new BusinessException("Dentista é obrigatório para iniciar atendimento avulso");
+        return dentistaService.buscarEntidadePorId(dentistaId);
+    }
+
+    private static String montarObservacoesAvulso(String motivo) {
+        String base = "[Consulta avulsa]";
+        if (motivo == null || motivo.isBlank())
+            return base;
+        return base + " " + motivo.trim();
     }
 }

@@ -52,16 +52,26 @@ function processQueue(error: unknown, token: string | null) {
   failedQueue = [];
 }
 
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const { accessToken } = useAuthStore.getState();
-  if (accessToken) {
-    if (isTokenExpired(accessToken)) {
-      clearSessionAndRedirect();
-      return Promise.reject(new Error('Sessão expirada'));
-    }
+const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/forgot-password', '/auth/reset-password'];
 
-    if (config.headers) {
-      config.headers['Authorization'] = `Bearer ${accessToken}`;
+function isPublicAuthRequest(url?: string) {
+  return PUBLIC_AUTH_PATHS.some((path) => url?.startsWith(path));
+}
+
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const publicAuth = isPublicAuthRequest(config.url);
+
+  if (!publicAuth) {
+    const { accessToken } = useAuthStore.getState();
+    if (accessToken) {
+      if (isTokenExpired(accessToken)) {
+        clearSessionAndRedirect();
+        return Promise.reject(new Error('Sessão expirada'));
+      }
+
+      if (config.headers) {
+        config.headers['Authorization'] = `Bearer ${accessToken}`;
+      }
     }
   }
 
@@ -70,7 +80,11 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     if (!('Content-Type' in config.headers)) config.headers['Content-Type'] = 'application/json';
   }
 
-  if (config.method && !['get', 'head', 'options'].includes(config.method)) {
+  if (
+    config.method &&
+    !['get', 'head', 'options'].includes(config.method) &&
+    !publicAuth
+  ) {
     config.headers = config.headers || {};
     if (!config.headers['Idempotency-Key']) {
       config.headers['Idempotency-Key'] = config.idempotencyKey ?? crypto.randomUUID();

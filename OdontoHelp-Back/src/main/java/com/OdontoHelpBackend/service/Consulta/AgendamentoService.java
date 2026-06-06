@@ -2,6 +2,7 @@ package com.OdontoHelpBackend.service.Consulta;
 
 import com.OdontoHelpBackend.Mapper.AgendamentoMapper;
 import com.OdontoHelpBackend.domain.Consulta.Agendamento;
+import com.OdontoHelpBackend.domain.Consulta.enums.OrigemAgendamento;
 import com.OdontoHelpBackend.domain.Consulta.enums.StatusConsulta;
 import com.OdontoHelpBackend.domain.usuario.Dentista;
 import com.OdontoHelpBackend.domain.usuario.Usuario;
@@ -76,6 +77,7 @@ public class AgendamentoService {
         agendamento.setPaciente(paciente);
         agendamento.setDentista(dentista);
         agendamento.setStatus(StatusConsulta.AGENDADO);
+        agendamento.setOrigem(OrigemAgendamento.AGENDADA);
 
         try {
             validarConflitoHorario(agendamento);
@@ -92,6 +94,9 @@ public class AgendamentoService {
         if (agendamento.getStatus() == StatusConsulta.CANCELADO
                 || agendamento.getStatus() == StatusConsulta.ATENDIDO)
             throw new BusinessException("Agendamento " + agendamento.getStatus() + " não pode ser alterado");
+
+        if (agendamento.getOrigem() == OrigemAgendamento.AVULSA)
+            throw new BusinessException("Consulta avulsa não pode ser reagendada");
 
         agendamentoMapper.updateEntity(dto, agendamento);
 
@@ -158,6 +163,9 @@ public class AgendamentoService {
 
 
     private void validarConflitoHorario(Agendamento agendamento) {
+        if (agendamento.getOrigem() == OrigemAgendamento.AVULSA)
+            return;
+
         Long dentistaId = agendamento.getDentista().getId();
         boolean conflito = agendamento.getId() == null
                 ? agendamentoRepository.existsByDentistaIdAndStatusNotAndDataInicioLessThanAndDataFimGreaterThan(
