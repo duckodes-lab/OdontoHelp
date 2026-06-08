@@ -3,7 +3,6 @@ import {
   Typography, IconButton, Divider, Button, Stack,
   TextField, Alert, Chip, Paper, Skeleton,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Close, MedicalServicesOutlined, DeleteOutlined,
@@ -12,7 +11,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   useAtendimento, useUpdateAtendimento, useFinalizarAtendimento,
-  useMarcarOdontogramaRevisado, useBaixaPlanoManual, useRemoverItemAtendimento,
+  useBaixaPlanoManual, useRemoverItemAtendimento,
 } from '../useAtendimentos';
 import BaixaPlanoDialog from '../BaixaPlanoDialog';
 import type { ItemPlano } from '../../planoTratamento/types';
@@ -28,6 +27,10 @@ import { useOdontograma } from '../../odontograma/useOdontograma';
 import type { OdontogramaMap } from '../../odontograma/types';
 import { useItensPlanoPendentes } from '../../planoTratamento/usePlanoTratamento';
 import AtendimentoAnexosSection from '../../arquivos/AtendimentoAnexosSection';
+import { useGerarCobrancaAtendimento } from '../../financeiro/useFinanceiro';
+import GerarCobrancaAtendimentoDialog, { type GerarCobrancaAtendimentoInput } from '../../financeiro/GerarCobrancaAtendimentoDialog';
+import { fmtMoeda, STATUS_COBRANCA_ITEM_LABELS } from '../../financeiro/financeiroLabels';
+import { useAuthStore } from '../../../shared/store/authStore';
 import PlanoPendenteSugestao from '../PlanoPendenteSugestao';
 
 interface TabPanelProps {
@@ -67,9 +70,11 @@ export default function AtendimentoDetailPage() {
   const { data: atendimento, isLoading } = useAtendimento(atendimentoId);
   const update = useUpdateAtendimento(atendimentoId!);
   const finalizar = useFinalizarAtendimento();
-  const marcarRevisado = useMarcarOdontogramaRevisado(atendimentoId!);
   const baixaManual = useBaixaPlanoManual(atendimentoId!);
   const removerItem = useRemoverItemAtendimento(atendimentoId!);
+  const gerarCobranca = useGerarCobrancaAtendimento();
+  const perfil = useAuthStore((s) => s.usuario?.perfil);
+  const [cobrancaDialog, setCobrancaDialog] = useState<GerarCobrancaAtendimentoInput | null>(null);
   const { data: mapaServidor } = useOdontograma(atendimento?.pacienteId ?? null);
   const { data: itensPendentes } = useItensPlanoPendentes(atendimento?.pacienteId ?? null);
 
@@ -95,17 +100,32 @@ export default function AtendimentoDetailPage() {
     }
   }, [atendimento]);
 
-  const sugestoesPlano = useMemo(() => {
-    if (!itensPendentes?.length || selectedDentes.length === 0) return [];
-    const jaAdicionados = new Set(
+  const itensPlanoRestantes = useMemo(() => {
+    if (!itensPendentes?.length) return [];
+    const idsCobertos = new Set(
+      items.map((i) => i.itemPlanoOrigemId).filter((id): id is number => id != null),
+    );
+    const paresCobertos = new Set(
       items.map((item) => `${item.numeroDente}-${item.procedimentoId}`),
     );
     return itensPendentes.filter(
       (item) =>
-        selectedDentes.includes(item.numeroDente) &&
-        !jaAdicionados.has(`${item.numeroDente}-${item.procedimentoId}`),
+        !idsCobertos.has(item.id) &&
+        !paresCobertos.has(`${item.numeroDente}-${item.procedimentoId}`),
     );
-  }, [itensPendentes, selectedDentes, items]);
+  }, [itensPendentes, items]);
+
+  const dentesPendentesPlano = useMemo(
+    () => [...new Set(itensPlanoRestantes.map((i) => i.numeroDente))],
+    [itensPlanoRestantes],
+  );
+
+  const sugestoesPlano = useMemo(() => {
+    if (!itensPlanoRestantes.length || selectedDentes.length === 0) return [];
+    return itensPlanoRestantes.filter((item) =>
+      selectedDentes.includes(item.numeroDente),
+    );
+  }, [itensPlanoRestantes, selectedDentes]);
 
   if (!atendimento) {
     if (isLoading) {
@@ -122,7 +142,13 @@ export default function AtendimentoDetailPage() {
   }
 
   const isFinalizado = atendimento.status === 'FINALIZADO';
-  const totalPendentesPlano = itensPendentes?.length ?? 0;
+  const totalPendentesPlano = itensPlanoRestantes.length;
+  const itensPendentesCobranca = items.filter(
+    (i) => i.statusCobranca !== 'ENVIADO' && i.statusCobranca !== 'COBRADO',
+  );
+  const totalCobrancaPendente = itensPendentesCobranca.reduce(
+    (s, i) => s + (i.valorCobradoSnapshot ?? 0), 0,
+  );
 
   // Mapa local — mescla servidor + itens ainda não salvos para feedback visual imediato
   const mapaLocal: OdontogramaMap = {
@@ -307,28 +333,7 @@ export default function AtendimentoDetailPage() {
                   Atendimento #{atendimento.id}
                 </Typography>
                 <AtendimentoStatusChip status={atendimento.status} />
-                {!atendimento.odontogramaRevisado && !isFinalizado && (
-                  <Chip label="Odontograma não revisado" size="small" color="warning" variant="outlined" />
-                )}
               </Box>
-              {!isFinalizado && (
-                <FormControlLabel
-                  sx={{ mt: 0.5 }}
-                  control={
-                    <Switch
-                      size="small"
-                      checked={atendimento.odontogramaRevisado}
-                      disabled={marcarRevisado.isPending}
-                      onChange={(_, checked) => marcarRevisado.mutate(checked)}
-                    />
-                  }
-                  label={
-                    <Typography variant="caption" color="text.secondary">
-                      Odontograma revisado
-                    </Typography>
-                  }
-                />
-              )}
               <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.78)' }}>
                 {atendimento.pacienteNome} • {atendimento.dentistaNome}
               </Typography>
@@ -354,7 +359,12 @@ export default function AtendimentoDetailPage() {
           {[
             { label: 'Paciente', value: atendimento.pacienteNome },
             { label: 'Procedimentos', value: `${items.length} registrado${items.length === 1 ? '' : 's'}` },
-            { label: 'Odontograma', value: atendimento.odontogramaRevisado ? 'Revisado' : 'Pendente' },
+            {
+              label: 'Plano de tratamento',
+              value: totalPendentesPlano > 0
+                ? `${totalPendentesPlano} item${totalPendentesPlano === 1 ? '' : 's'} pendente${totalPendentesPlano === 1 ? '' : 's'}`
+                : 'Em dia',
+            },
           ].map((item) => (
             <Paper key={item.label} variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
               <Typography variant="overline" color="text.disabled">
@@ -422,16 +432,16 @@ export default function AtendimentoDetailPage() {
                 fullWidth
                 disabled={isFinalizado}
               />
-              {itensPendentes && itensPendentes.length > 0 && (
+              {itensPlanoRestantes.length > 0 && (
                 <Box sx={{
                   p: 2, border: '1px solid', borderColor: '#F59E0B',
                   borderRadius: 2, bgcolor: '#FFFBF0',
                 }}>
                   <Typography variant="caption" sx={{ fontWeight: 600, color: '#92400E', display: 'block', mb: 1 }}>
-                    Plano pendente — {itensPendentes.length} item{itensPendentes.length > 1 ? 's' : ''}
+                    Plano pendente — {itensPlanoRestantes.length} item{itensPlanoRestantes.length > 1 ? 's' : ''}
                   </Typography>
                   <Stack spacing={0.5}>
-                    {itensPendentes.map((item) => (
+                    {itensPlanoRestantes.map((item) => (
                       <Typography key={item.id} variant="caption" color="text.secondary">
                         • Dente {item.numeroDente} — {item.procedimentoNome}
                       </Typography>
@@ -481,17 +491,17 @@ export default function AtendimentoDetailPage() {
                 />
               )}
               <Typography variant="caption" color="text.secondary">
-                As situações dos dentes são atualizadas automaticamente ao finalizar o atendimento.
-                Dentes com borda laranja têm plano de tratamento pendente
-                {totalPendentesPlano > 0 && ` (${totalPendentesPlano} item${totalPendentesPlano === 1 ? '' : 's'} pendente${totalPendentesPlano === 1 ? '' : 's'})`}.
-                Selecione o dente para ver sugestões do plano.
+                A cor do dente é aplicada ao salvar ou finalizar o atendimento.
+                A borda laranja some ao registrar o procedimento previsto no plano
+                {totalPendentesPlano > 0 && ` (${totalPendentesPlano} item${totalPendentesPlano === 1 ? '' : 's'} ainda pendente${totalPendentesPlano === 1 ? '' : 's'})`}.
+                Selecione o dente para ver sugestões.
               </Typography>
               <OdontogramaVisual
                 pacienteId={atendimento.pacienteId}
                 selectedDentes={selectedDentes}
                 onDenteClick={isFinalizado ? undefined : handleDenteClick}
                 mapaOverride={mapaLocal}
-                dentesPendentesPlano={itensPendentes?.map((i) => i.numeroDente) ?? []}
+                dentesPendentesPlano={dentesPendentesPlano}
               />
             </Stack>
           </TabPanel>
@@ -541,6 +551,19 @@ export default function AtendimentoDetailPage() {
                               {item.observacao}
                             </Typography>
                           )}
+                          <Stack direction="row" spacing={1} sx={{ mt: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                              {fmtMoeda(item.valorCobradoSnapshot ?? 0)}
+                            </Typography>
+                            {item.statusCobranca && (
+                              <Chip
+                                size="small"
+                                label={STATUS_COBRANCA_ITEM_LABELS[item.statusCobranca] ?? item.statusCobranca}
+                                color={item.statusCobranca === 'PENDENTE' ? 'warning' : item.statusCobranca === 'ENVIADO' ? 'info' : 'success'}
+                                variant="outlined"
+                              />
+                            )}
+                          </Stack>
                         </Box>
                         {!isFinalizado && (
                           <IconButton
@@ -591,6 +614,28 @@ export default function AtendimentoDetailPage() {
               </Button>
             </>
           )}
+          {isFinalizado && perfil === 'ADMIN' && itensPendentesCobranca.length > 0 && (
+            <Button
+              variant="contained"
+              color="secondary"
+              disabled={gerarCobranca.isPending}
+              onClick={() => setCobrancaDialog({
+                pacienteId: atendimento.pacienteId,
+                atendimentoId: atendimento.id,
+                pacienteNome: atendimento.pacienteNome,
+                itens: itensPendentesCobranca.map((i) => ({
+                  itemAtendimentoId: i.id,
+                  procedimentoId: i.procedimentoId,
+                  procedimentoNome: i.procedimentoNome,
+                  numeroDente: i.numeroDente,
+                  valorCobradoSnapshot: i.valorCobradoSnapshot ?? 0,
+                  valorReferencia: i.valorCobradoSnapshot ?? 0,
+                })),
+              })}
+            >
+              Gerar cobrança ({fmtMoeda(totalCobrancaPendente)})
+            </Button>
+          )}
         </Box>
       </Paper>
 
@@ -608,6 +653,14 @@ export default function AtendimentoDetailPage() {
         onClose={handleBaixaClose}
         onConfirm={handleBaixaConfirm}
         loading={baixaManual.isPending || finalizar.isPending}
+      />
+
+      <GerarCobrancaAtendimentoDialog
+        open={!!cobrancaDialog}
+        onClose={() => setCobrancaDialog(null)}
+        data={cobrancaDialog}
+        onSuccess={(msg) => setToast({ open: true, msg, severity: 'success' })}
+        onError={(msg) => setToast({ open: true, msg, severity: 'error' })}
       />
 
       <AtendimentoProcedimentoDrawer

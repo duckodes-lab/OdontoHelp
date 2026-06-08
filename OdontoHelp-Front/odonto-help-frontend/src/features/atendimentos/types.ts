@@ -45,8 +45,13 @@ export const SITUACAO_DENTE_COLORS: Record<SituacaoDente, string> = {
 
 export interface ItemAtendimento {
   id: number;
+  /** Vincula ao item do plano quando registrado via sugestão (apenas sessão local). */
+  itemPlanoOrigemId?: number;
   procedimentoId: number;
   procedimentoNome: string;
+  valorCobradoSnapshot?: number;
+  statusCobranca?: string;
+  financeiroCobrancaId?: string | null;
   numeroDente: number;
   situacaoNova: SituacaoDente;
   observacao: string | null;

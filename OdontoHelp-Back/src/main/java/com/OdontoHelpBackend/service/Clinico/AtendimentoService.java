@@ -18,8 +18,10 @@ import com.OdontoHelpBackend.dto.Clinica.Request.IniciarAtendimentoAvulsoRequest
 import com.OdontoHelpBackend.dto.Clinica.Request.IniciarAtendimentoRequestDTO;
 import com.OdontoHelpBackend.dto.Clinica.Request.ItemAtendimentoRequestDTO;
 import com.OdontoHelpBackend.dto.Clinica.Request.MarcarItemCobradoRequestDTO;
+import com.OdontoHelpBackend.dto.Clinica.Response.AtendimentoPendenteCobrancaDTO;
 import com.OdontoHelpBackend.dto.Clinica.Response.AtendimentoResponseDTO;
 import com.OdontoHelpBackend.dto.Clinica.Response.AtendimentoUpdateResultDTO;
+import com.OdontoHelpBackend.dto.Clinica.Response.ItemPendenteCobrancaDTO;
 import com.OdontoHelpBackend.dto.Clinica.Response.ItemPlanoResponseDTO;
 import com.OdontoHelpBackend.infra.exception.AcessoNegadoException;
 import com.OdontoHelpBackend.infra.exception.BusinessException;
@@ -38,7 +40,10 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -102,6 +107,44 @@ public class AtendimentoService {
         return atendimentoRepository
                 .filtrarTodos(nomePaciente, dataInicio, dataFim, status, pageable)
                 .map(atendimentoMapper::toResponse);
+    }
+
+    public Slice<AtendimentoPendenteCobrancaDTO> listarPendentesCobranca(
+            String nomePaciente, Long dentistaId,
+            LocalDate dataFinalizacaoDe, LocalDate dataFinalizacaoAte,
+            Pageable pageable, Usuario usuarioLogado) {
+        if (usuarioLogado.getPerfil() != PerfilUsuario.ADMIN
+                && usuarioLogado.getPerfil() != PerfilUsuario.RECEPCAO) {
+            throw new AcessoNegadoException("Sem permissao para listar atendimentos pendentes de cobranca");
+        }
+        LocalDateTime inicio = dataFinalizacaoDe != null ? dataFinalizacaoDe.atStartOfDay() : null;
+        LocalDateTime fim = dataFinalizacaoAte != null ? dataFinalizacaoAte.atTime(LocalTime.MAX) : null;
+        String nome = (nomePaciente != null && !nomePaciente.isBlank()) ? nomePaciente.trim() : null;
+        return atendimentoRepository.findPendentesCobranca(nome, dentistaId, inicio, fim, pageable)
+                .map(this::toPendenteCobranca);
+    }
+
+    private AtendimentoPendenteCobrancaDTO toPendenteCobranca(Atendimento atendimento) {
+        var itens = atendimento.getItens().stream()
+                .filter(i -> i.getStatusCobranca() == StatusCobrancaItem.PENDENTE)
+                .map(i -> new ItemPendenteCobrancaDTO(
+                        i.getId(),
+                        i.getProcedimento().getId(),
+                        i.getProcedimento().getNome(),
+                        i.getNumeroDente(),
+                        i.getValorCobradoSnapshot()))
+                .toList();
+        BigDecimal total = itens.stream()
+                .map(ItemPendenteCobrancaDTO::valorCobradoSnapshot)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new AtendimentoPendenteCobrancaDTO(
+                atendimento.getId(),
+                atendimento.getPaciente().getId(),
+                atendimento.getPaciente().getNome(),
+                atendimento.getDentista().getNome(),
+                atendimento.getHoraFim(),
+                itens,
+                total);
     }
 
     @Transactional

@@ -73,6 +73,7 @@ export default function AtendimentoProcedimentoDrawer({
       numeroDente,
       situacaoNova: data.situacaoNova as SituacaoDente,
       observacao: data.observacao || null,
+      ...(sugestaoPlano ? { itemPlanoOrigemId: sugestaoPlano.id } : {}),
     }));
     onAddProcedimento(novosItens);
     reset();

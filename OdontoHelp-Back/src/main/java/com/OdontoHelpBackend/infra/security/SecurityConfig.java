@@ -31,6 +31,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final SecurityFilter securityFilter;
+    private final InternalServiceAccessFilter internalServiceAccessFilter;
     private final RateLimitFilter rateLimitFilter;
     private final IdempotencyFilter idempotencyFilter;
 
@@ -67,13 +68,8 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((request, response, authException) -> {
-                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            response.setContentType("application/json");
-                            response.getWriter().write(
-                                    "{\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Não autenticado\"}"
-                            );
-                        })
+                        .authenticationEntryPoint((request, response, authException) ->
+                                UnauthorizedResponseWriter.write(response, "Não autenticado"))
                         .accessDeniedHandler((request, response, accessDeniedException) -> {
                             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                             response.setContentType("application/json");
@@ -84,7 +80,8 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> {
                             auth.requestMatchers(HttpMethod.POST, "/auth/onboarding/concluir").authenticated()
-                            .requestMatchers("/auth/**").permitAll();
+                            .requestMatchers("/auth/**").permitAll()
+                            .requestMatchers("/internal/**").permitAll();
                             if (swaggerEnabled) {
                                 auth.requestMatchers(
                                         "/swagger-ui.html",
@@ -110,8 +107,12 @@ public class SecurityConfig {
                             // Itens pendentes do plano — DENTISTA precisa ver como referência
                             .requestMatchers(HttpMethod.GET, "/pacientes/*/planos/itens-pendentes").hasAnyRole("ADMIN", "DENTISTA")
 
+                            // LGPD — rotas específicas antes da regra genérica de pacientes
+                            .requestMatchers(HttpMethod.GET, "/pacientes/*/dados-pessoais").hasAnyRole("ADMIN", "PACIENTE")
+                            .requestMatchers(HttpMethod.DELETE, "/pacientes/*/anonimizar").hasRole("ADMIN")
+
                             // Pacientes — regra genérica (PATCH de odontograma já foi tratado acima)
-                            .requestMatchers(HttpMethod.GET,   "/pacientes", "/pacientes/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
+                            .requestMatchers(HttpMethod.GET, "/pacientes", "/pacientes/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
                             .requestMatchers(HttpMethod.POST,  "/pacientes", "/pacientes/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
                             .requestMatchers(HttpMethod.PUT,   "/pacientes", "/pacientes/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
                             .requestMatchers(HttpMethod.PATCH, "/pacientes", "/pacientes/**").hasAnyRole("ADMIN", "RECEPCAO", "DENTISTA")
@@ -128,16 +129,20 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.PATCH, "/procedimentos", "/procedimentos/**").hasAnyRole("ADMIN", "RECEPCAO")
 
                             // Atendimentos e Planos de Tratamento
+                            .requestMatchers(HttpMethod.GET, "/atendimentos/pendentes-cobranca")
+                                .hasAnyRole("ADMIN", "RECEPCAO")
+                            .requestMatchers(HttpMethod.PATCH, "/atendimentos/itens/*/marcar-cobrado")
+                                .hasAnyRole("ADMIN", "RECEPCAO")
+                            .requestMatchers("/notificacoes/cobranca/**").hasAnyRole("ADMIN", "RECEPCAO")
                             .requestMatchers(HttpMethod.POST, "/atendimentos/*/arquivos").hasAnyRole("ADMIN", "DENTISTA")
                             .requestMatchers("/atendimentos", "/atendimentos/**").hasAnyRole("ADMIN", "DENTISTA")
                             .requestMatchers("/planos-tratamento", "/planos-tratamento/**").hasAnyRole("ADMIN", "DENTISTA")
 
                             .anyRequest().authenticated();
-                })
-                .headers(headers -> headers
-                        .frameOptions(frame -> frame.sameOrigin())
-                        .contentTypeOptions(Customizer.withDefaults())
-                )
+                });
+        SecurityHeadersConfig.apply(http);
+        http
+                .addFilterBefore(internalServiceAccessFilter, UsernamePasswordAuthenticationFilter.class)
                 // Todos ancorados em UsernamePasswordAuthenticationFilter (Spring Security 6.4+ exige ordem registrada)
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(idempotencyFilter, UsernamePasswordAuthenticationFilter.class)

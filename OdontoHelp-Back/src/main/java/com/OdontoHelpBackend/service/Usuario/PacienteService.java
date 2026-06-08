@@ -2,10 +2,15 @@ package com.OdontoHelpBackend.service.Usuario;
 
 import com.OdontoHelpBackend.Mapper.PacienteMapper;
 import com.OdontoHelpBackend.domain.usuario.Paciente;
+import com.OdontoHelpBackend.domain.usuario.Usuario;
+import com.OdontoHelpBackend.domain.usuario.enums.PerfilUsuario;
 import com.OdontoHelpBackend.dto.Usuario.Request.Paciente.PacienteAnamneseDTO;
 import com.OdontoHelpBackend.dto.Usuario.Request.Paciente.PacienteRequestDTO;
 import com.OdontoHelpBackend.dto.Usuario.Request.Paciente.PacienteUpdateDTO;
+import com.OdontoHelpBackend.dto.Usuario.Response.Paciente.PacienteDadosPessoaisDTO;
 import com.OdontoHelpBackend.dto.Usuario.Response.Paciente.PacienteResponseDTO;
+import com.OdontoHelpBackend.dto.Usuario.Response.Paciente.PacienteSnapshotFinanceiroDTO;
+import com.OdontoHelpBackend.infra.exception.AcessoNegadoException;
 import com.OdontoHelpBackend.infra.exception.NotFoundException;
 import com.OdontoHelpBackend.infra.util.EmailNormalizer;
 import com.OdontoHelpBackend.repository.Usuario.PacienteRepository;
@@ -109,5 +114,55 @@ public class PacienteService {
         paciente.setIsAtivo(isAtivo);
 
         return privacidadeService.aplicar(pacienteMapper.toResponse(pacienteRepository.save(paciente)));
+    }
+
+    @Transactional(readOnly = true)
+    public PacienteDadosPessoaisDTO dadosPessoais(Long id, Usuario usuarioLogado) {
+        validarAcessoTitular(id, usuarioLogado);
+        Paciente paciente = buscarEntidadePorId(id);
+        var endereco = paciente.getEndereco();
+        return new PacienteDadosPessoaisDTO(
+                paciente.getId(),
+                paciente.getNome(),
+                paciente.getCpf(),
+                paciente.getEmail(),
+                paciente.getTelefone(),
+                paciente.getGenero(),
+                paciente.getDataNascimento(),
+                endereco != null ? endereco.getRua() : null,
+                endereco != null ? endereco.getNumero() : null,
+                endereco != null ? endereco.getComplemento() : null,
+                endereco != null ? endereco.getBairro() : null,
+                endereco != null ? endereco.getCidade() : null,
+                endereco != null ? endereco.getUf() : null,
+                endereco != null ? endereco.getCep() : null,
+                paciente.getObservacoesMedicas()
+        );
+    }
+
+    // LGPD Art. 18 VI — anonimização de dados desnecessários. O registro clínico é mantido por obrigação legal (CFO), mas desvinculado da identidade do titular.
+    @Transactional
+    public void anonimizar(Long id) {
+        Paciente paciente = buscarEntidadePorId(id);
+        paciente.setNome("PACIENTE_ANONIMIZADO_" + id);
+        paciente.setCpf(null);
+        paciente.setCpfHash(null);
+        paciente.setEmail(null);
+        paciente.setEmailHash(null);
+        paciente.setTelefone("");
+        if (paciente.getEndereco() != null) {
+            paciente.setEndereco(null);
+        }
+        pacienteRepository.save(paciente);
+    }
+
+    private void validarAcessoTitular(Long pacienteId, Usuario usuarioLogado) {
+        if (usuarioLogado.getPerfil() == PerfilUsuario.ADMIN) {
+            return;
+        }
+        if (usuarioLogado.getId().equals(pacienteId)) {
+            return;
+        }
+        throw new AcessoNegadoException("Acesso negado aos dados pessoais do paciente");
     }
 }

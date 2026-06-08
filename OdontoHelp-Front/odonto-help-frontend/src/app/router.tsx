@@ -15,6 +15,7 @@ import UsuariosPage      from '../features/usuarios/pages/UsuariosPage';
 import ProcedimentosPage from '../features/procedimentos/pages/ProcedimentosPage';
 import AtendimentosPage  from '../features/atendimentos/pages/AtendimentosPage';
 import AtendimentoDetailPage from '../features/atendimentos/pages/AtendimentoDetailPage';
+import FinanceiroPage from '../features/financeiro/pages/FinanceiroPage';
 
 const router = createBrowserRouter([
   // ─── pública ────────────────────────────────────────────────────────────────
@@ -42,6 +43,14 @@ const router = createBrowserRouter([
               { path: 'pacientes/:id',    element: <PacienteHubPage /> },
               { path: 'dashboard', element: <DashboardPage /> },
               { path: 'dentistas', element: <DentistasPage /> },
+            ],
+          },
+
+          // ADMIN + RECEPCAO (financeiro)
+          {
+            element: <RoleRoute allowed={['ADMIN', 'RECEPCAO']} />,
+            children: [
+              { path: 'financeiro', element: <FinanceiroPage /> },
             ],
           },
 

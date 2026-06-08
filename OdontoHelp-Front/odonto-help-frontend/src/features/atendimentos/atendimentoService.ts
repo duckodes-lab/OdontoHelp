@@ -100,4 +100,23 @@ export const atendimentoService = {
     });
     return data;
   },
+
+  listarPendentesCobranca: async (
+    page = 0,
+    size = 10,
+    filtros: {
+      nomePaciente?: string;
+      dentistaId?: number | '';
+      dataFinalizacaoDe?: string;
+      dataFinalizacaoAte?: string;
+    } = {},
+  ) => {
+    const query = new URLSearchParams({ page: String(page), size: String(size) });
+    if (filtros.nomePaciente) query.set('nomePaciente', filtros.nomePaciente);
+    if (filtros.dentistaId) query.set('dentistaId', String(filtros.dentistaId));
+    if (filtros.dataFinalizacaoDe) query.set('dataFinalizacaoDe', filtros.dataFinalizacaoDe);
+    if (filtros.dataFinalizacaoAte) query.set('dataFinalizacaoAte', filtros.dataFinalizacaoAte);
+    const { data } = await api.get(`${BASE_ATENDIMENTOS}/pendentes-cobranca?${query}`);
+    return data;
+  },
 };
