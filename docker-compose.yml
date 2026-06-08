@@ -51,6 +51,7 @@ services:
       # Local: 32+ bytes em Base64 (HS256). Nao use em VPS. Se .env tiver JWT_SECRET= vazio, apague a linha.
       JWT_SECRET: ${JWT_SECRET:-braFuSmLxj7ZxDzvlDDEO7xSLwSCpEzo2ofobhnCjNY=}
       CRYPTO_SECRET_KEY: ${CRYPTO_SECRET_KEY:-T2RvbnRvSGVscERldkxvY2FsQ3J5cHRvS2V5MjAyNCE=}
+      FISCAL_EMISSOR_CNPJ: ${FISCAL_EMISSOR_CNPJ:-12345678000199}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
       APP_ADMIN_EMAIL: ${APP_ADMIN_EMAIL:-admin@odonto.com}
       APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-123456}
@@ -68,6 +69,9 @@ services:
       STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-minioadmin}
       STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-minioadmin}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-odontohelp}
+      # Dev local: migrations editadas apos apply geram checksum mismatch no volume persistente
+      SPRING_FLYWAY_REPAIR_ON_MIGRATE: "true"
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: "false"
     ports:
       - "${BACKEND_PORT:-8080}:8080"
 
@@ -79,6 +83,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      backend:
+        condition: service_started
       fiscal:
         condition: service_healthy
     environment:
@@ -99,6 +105,8 @@ services:
       FISCAL_PORTAL_OXY_URL: ${FISCAL_PORTAL_OXY_URL:-}
       FISCAL_EMISSOR_RAZAO_SOCIAL: ${FISCAL_EMISSOR_RAZAO_SOCIAL:-OdontoHelp Clinica Dev}
       FISCAL_EMISSOR_CNPJ: ${FISCAL_EMISSOR_CNPJ:-12345678000199}
+      SPRING_FLYWAY_REPAIR_ON_MIGRATE: "true"
+      SPRING_FLYWAY_VALIDATE_ON_MIGRATE: "false"
     ports:
       - "${FINANCEIRO_PORT:-8081}:8081"
 
@@ -152,6 +160,8 @@ services:
         condition: service_healthy
       fiscal-db-init:
         condition: service_completed_successfully
+      backend:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8082/v1/health"]
       interval: 30s

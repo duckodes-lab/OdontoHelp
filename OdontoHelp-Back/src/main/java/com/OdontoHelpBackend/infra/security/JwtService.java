@@ -27,15 +27,21 @@ public class JwtService {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpiration;
 
+    @Value("${app.tenant-id:}")
+    private String tenantId;
+
     public String gerarAccessToken(Usuario usuario) {
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(usuario.getEmail())
                 .claim("perfil", usuario.getPerfil().name())
                 .claim("usuarioId", usuario.getId())
+                .claim("privacyPolicyVersion", usuario.getPrivacyPolicyVersion())
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + accessExpiration))
-                .signWith(getSigningKey())
-                .compact();
+                .expiration(new Date(System.currentTimeMillis() + accessExpiration));
+        if (tenantId != null && !tenantId.isBlank()) {
+            builder.claim("tenantId", tenantId.replaceAll("\\D", ""));
+        }
+        return builder.signWith(getSigningKey()).compact();
     }
 
     public String extrairEmail(String token) {
@@ -46,7 +52,6 @@ public class JwtService {
         return getClaims(token).get("usuarioId", Long.class);
     }
 
-    // Necessário para o logout invalidar o token na blacklist até a expiração natural
     public Instant extrairExpiracao(String token) {
         return getClaims(token).getExpiration().toInstant();
     }
@@ -68,6 +73,10 @@ public class JwtService {
         return Instant.now().plusMillis(refreshExpiration);
     }
 
+    public void validarChaveSecreta() {
+        getSigningKey();
+    }
+
     private Claims getClaims(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())
@@ -80,7 +89,6 @@ public class JwtService {
         return Keys.hmacShaKeyFor(resolveKeyBytes(secret));
     }
 
-    /** Base64 (>= 32 bytes decodificados) ou texto UTF-8 com pelo menos 32 caracteres. */
     private static byte[] resolveKeyBytes(String raw) {
         if (raw == null || raw.isBlank()) {
             throw new IllegalStateException("jwt.secret nao configurado (defina JWT_SECRET no .env)");

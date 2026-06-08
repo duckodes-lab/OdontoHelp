@@ -11,7 +11,6 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-
 @Repository
 public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
@@ -21,13 +20,13 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     Slice<Usuario> findByNomeContainingIgnoreCase(String nome, Pageable pageable);
 
-    boolean existsByCpf(String cpf);
+    boolean existsByCpfHash(String cpfHash);
 
-    boolean existsByEmail(String email);
+    boolean existsByEmailHash(String emailHash);
 
-    boolean existsByEmailAndIdNot(String email, Long id);
+    boolean existsByEmailHashAndIdNot(String emailHash, Long id);
 
-    Optional<Usuario> findByEmail(String email);
+    Optional<Usuario> findByEmailHash(String emailHash);
 
     Slice<Usuario> findByIsAtivo(Boolean isAtivo, Pageable pageable);
 
@@ -49,5 +48,4 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
             @Param("isAtivo") Boolean isAtivo,
             Pageable pageable
     );
-
 }

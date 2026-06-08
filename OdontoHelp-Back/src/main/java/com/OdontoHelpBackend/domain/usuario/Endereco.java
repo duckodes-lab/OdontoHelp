@@ -1,10 +1,10 @@
 package com.OdontoHelpBackend.domain.usuario;
 
+import com.OdontoHelpBackend.util.SensitiveDataConverter;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
 
 @Entity
 @Getter
@@ -17,32 +17,37 @@ public class Endereco {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-
     @OneToOne
     @JoinColumn(name = "usuario_id", nullable = true, unique = true)
     private Usuario usuario;
 
-    @Column(nullable = false, length = 100)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "rua_encrypted", nullable = false, length = 512)
     private String rua;
 
-    @Column(nullable = false, length = 10)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "numero_encrypted", nullable = false, length = 512)
     private String numero;
 
-    @Column(length = 50)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "complemento_encrypted", length = 512)
     private String complemento;
 
-    @Column(nullable = false, length = 50)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "bairro_encrypted", nullable = false, length = 512)
     private String bairro;
 
-    @Column(nullable = false, length = 50)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "cidade_encrypted", nullable = false, length = 512)
     private String cidade;
 
-    @Column(nullable = false, length = 2)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "uf_encrypted", nullable = false, length = 16)
     private String uf;
 
-    @Column(nullable = false, length = 8)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "cep_encrypted", nullable = false, length = 512)
     private String cep;
-
 
     @PrePersist
     @PreUpdate
@@ -55,4 +60,3 @@ public class Endereco {
         if (this.complemento != null) this.complemento = this.complemento.trim().toUpperCase();
     }
 }
-

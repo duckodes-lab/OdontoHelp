@@ -14,6 +14,7 @@ import com.OdontoHelpBackend.infra.exception.AcessoNegadoException;
 import com.OdontoHelpBackend.infra.exception.NotFoundException;
 import com.OdontoHelpBackend.infra.util.EmailNormalizer;
 import com.OdontoHelpBackend.repository.Usuario.PacienteRepository;
+import com.OdontoHelpBackend.infra.security.token.RefreshTokenRepository;
 import com.OdontoHelpBackend.service.Clinico.OdontogramaService;
 import com.OdontoHelpBackend.service.Utils.PrivacidadeService;
 import com.OdontoHelpBackend.service.Utils.ValidacoesService;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PacienteService {
 
     private final PacienteRepository pacienteRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final UsuarioService usuarioService;
     private final PacienteMapper pacienteMapper;
     private final ValidacoesService validacoesService;
@@ -146,12 +148,20 @@ public class PacienteService {
         Paciente paciente = buscarEntidadePorId(id);
         paciente.setNome("PACIENTE_ANONIMIZADO_" + id);
         paciente.setCpf(null);
+        paciente.setCpfHash(null);
         paciente.setEmail(null);
+        paciente.setEmailHash(null);
         paciente.setTelefone("");
+        paciente.setGenero(null);
+        paciente.setDataNascimento(null);
+        paciente.setObservacoesMedicas(null);
+        paciente.setSenha(null);
+        paciente.setIsAtivo(false);
         if (paciente.getEndereco() != null) {
             paciente.setEndereco(null);
         }
         pacienteRepository.save(paciente);
+        refreshTokenRepository.revogarTodosPorUsuario(id);
     }
 
     private void validarAcessoTitular(Long pacienteId, Usuario usuarioLogado) {

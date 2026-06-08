@@ -1,6 +1,7 @@
 package com.OdontoHelpBackend.service.Auth;
 
 import com.OdontoHelpBackend.domain.usuario.Usuario;
+import com.OdontoHelpBackend.util.MaskUtil;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +26,7 @@ public class PasswordResetEmailService {
 
     public void enviar(Usuario usuario, String resetLink) {
         if (!mailEnabled) {
-            log.info("Link de redefinicao de senha para {}: {}", usuario.getEmail(), resetLink);
+            log.info("Link de redefinicao de senha enviado para {}", MaskUtil.email(usuario.getEmail()));
             return;
         }
 

@@ -7,7 +7,9 @@ import com.OdontoHelpBackend.infra.exception.InvalidTokenException;
 import com.OdontoHelpBackend.infra.security.ratelimit.RateLimitService;
 import com.OdontoHelpBackend.infra.security.token.PasswordResetToken;
 import com.OdontoHelpBackend.infra.security.token.PasswordResetTokenRepository;
+import com.OdontoHelpBackend.infra.security.token.RefreshTokenRepository;
 import com.OdontoHelpBackend.repository.Usuario.UsuarioRepository;
+import com.OdontoHelpBackend.util.UsuarioLookupHelper;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,8 +31,10 @@ public class PasswordResetService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
+    private final UsuarioLookupHelper usuarioLookupHelper;
     private final UsuarioRepository usuarioRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetEmailService passwordResetEmailService;
     private final PasswordEncoder passwordEncoder;
     private final RateLimitService rateLimitService;
@@ -42,7 +46,7 @@ public class PasswordResetService {
     public void solicitar(ForgotPasswordRequest request) {
         String email = request.email().trim().toLowerCase();
         rateLimitService.checkForgotPasswordByEmail(email);
-        usuarioRepository.findByEmail(email)
+        usuarioLookupHelper.findByEmail(email)
                 .filter(usuario -> Boolean.TRUE.equals(usuario.getIsAtivo()))
                 .ifPresent(this::criarTokenEEnviar);
     }
@@ -58,8 +62,10 @@ public class PasswordResetService {
 
         Usuario usuario = resetToken.getUsuario();
         usuario.setSenha(passwordEncoder.encode(request.novaSenha()));
+        usuarioRepository.save(usuario);
         resetToken.setUsado(true);
         passwordResetTokenRepository.invalidarAtivosPorUsuario(usuario.getId());
+        refreshTokenRepository.revogarTodosPorUsuario(usuario.getId());
     }
 
     private void criarTokenEEnviar(Usuario usuario) {

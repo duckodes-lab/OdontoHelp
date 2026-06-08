@@ -2,7 +2,7 @@ package com.OdontoHelpBackend.infra.security;
 
 import com.OdontoHelpBackend.domain.usuario.Usuario;
 import com.OdontoHelpBackend.infra.security.token.TokenBlacklist;
-import com.OdontoHelpBackend.repository.Usuario.UsuarioRepository;
+import com.OdontoHelpBackend.util.UsuarioLookupHelper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,7 +26,7 @@ public class SecurityFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(SecurityFilter.class);
 
     private final JwtService jwtService;
-    private final UsuarioRepository usuarioRepository;
+    private final UsuarioLookupHelper usuarioLookupHelper;
     private final TokenBlacklist tokenBlacklist;
 
     @Override
@@ -37,24 +37,27 @@ public class SecurityFilter extends OncePerRequestFilter {
 
         String token = extrairToken(request);
 
-        if (token != null && !tokenBlacklist.estaBloqueado(token)) {
-            try {
-                String email = jwtService.extrairEmail(token);
-
-                if (email != null && deveSubstituirAutenticacao()) {
-                    usuarioRepository.findByEmail(email).ifPresent(usuario -> {
-                        if (Boolean.TRUE.equals(usuario.getIsAtivo())) {
-                            var auth = new UsernamePasswordAuthenticationToken(
-                                    usuario, null, usuario.getAuthorities()
-                            );
-                            auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                            SecurityContextHolder.getContext().setAuthentication(auth);
-                        }
-                    });
-                }
-            } catch (Exception e) {
-                log.debug("Token JWT invalido ou expirado: {}", e.getMessage());
+        if (token != null) {
+            if (tokenBlacklist.estaBloqueado(token)) {
                 SecurityContextHolder.clearContext();
+            } else {
+                try {
+                    String email = jwtService.extrairEmail(token);
+                    if (email != null && deveSubstituirAutenticacao()) {
+                        usuarioLookupHelper.findByEmail(email).ifPresent(usuario -> {
+                            if (Boolean.TRUE.equals(usuario.getIsAtivo())) {
+                                var auth = new UsernamePasswordAuthenticationToken(
+                                        usuario, null, usuario.getAuthorities()
+                                );
+                                auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                                SecurityContextHolder.getContext().setAuthentication(auth);
+                            }
+                        });
+                    }
+                } catch (Exception e) {
+                    log.debug("Token JWT invalido ou expirado: {}", e.getMessage());
+                    SecurityContextHolder.clearContext();
+                }
             }
         }
 

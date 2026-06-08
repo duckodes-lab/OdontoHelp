@@ -28,7 +28,7 @@ public class JwtBlacklistService {
             return response != null && response.blacklisted();
         } catch (Exception ex) {
             log.warn("Falha ao consultar blacklist do Core ({}): {}", blacklistUrl, ex.getMessage());
-            return false;
+            return true;
         }
     }
 

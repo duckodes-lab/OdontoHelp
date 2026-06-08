@@ -121,9 +121,9 @@ public class ErrorHandler {
             String lower = detail.toLowerCase();
             if (lower.contains("uk_dentista_cro") || lower.contains("(cro)"))
                 message = "CRO já cadastrado";
-            else if (lower.contains("uk_usuario_email") || lower.contains("(email)"))
+            else if (lower.contains("uk_usuario_email") || lower.contains("email_hash"))
                 message = "E-mail já cadastrado";
-            else if (lower.contains("uk_usuario_cpf") || lower.contains("(cpf)"))
+            else if (lower.contains("uk_usuario_cpf") || lower.contains("cpf_hash"))
                 message = "CPF já cadastrado";
             else if (lower.contains("ex_agendamento_dentista_horario"))
                 message = "Dentista já possui agendamento neste horário";

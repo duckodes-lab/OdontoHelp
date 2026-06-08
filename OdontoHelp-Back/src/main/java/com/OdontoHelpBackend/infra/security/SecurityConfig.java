@@ -80,6 +80,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> {
                             auth.requestMatchers(HttpMethod.POST, "/auth/onboarding/concluir").authenticated()
+                            .requestMatchers(HttpMethod.POST, "/auth/logout").authenticated()
                             .requestMatchers("/auth/**").permitAll()
                             .requestMatchers("/internal/**").permitAll();
                             if (swaggerEnabled) {

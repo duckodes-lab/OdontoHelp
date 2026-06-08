@@ -3,6 +3,7 @@ package com.OdontoHelpBackend.config;
 import com.OdontoHelpBackend.domain.usuario.Usuario;
 import com.OdontoHelpBackend.domain.usuario.enums.PerfilUsuario;
 import com.OdontoHelpBackend.repository.Usuario.UsuarioRepository;
+import com.OdontoHelpBackend.util.UsuarioLookupHelper;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ProdBootstrapInitializer implements ApplicationRunner {
 
+    private final UsuarioLookupHelper usuarioLookupHelper;
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -40,7 +42,7 @@ public class ProdBootstrapInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         String email = adminEmail.trim().toLowerCase();
 
-        usuarioRepository.findByEmail(email)
+        usuarioLookupHelper.findByEmail(email)
                 .ifPresentOrElse(this::garantirAdminAtivo, () -> criarAdmin(email));
     }
 

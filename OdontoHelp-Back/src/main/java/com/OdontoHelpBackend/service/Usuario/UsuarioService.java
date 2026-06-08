@@ -11,6 +11,7 @@ import com.OdontoHelpBackend.infra.exception.BusinessException;
 import com.OdontoHelpBackend.infra.exception.ConflictException;
 import com.OdontoHelpBackend.infra.exception.NotFoundException;
 import com.OdontoHelpBackend.repository.Usuario.UsuarioRepository;
+import com.OdontoHelpBackend.util.UsuarioLookupHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -30,6 +31,7 @@ import java.time.LocalDate;
 public class UsuarioService {
 
     private final PasswordEncoder passwordEncoder;
+    private final UsuarioLookupHelper usuarioLookupHelper;
     private final UsuarioRepository usuarioRepository;
     private final UsuarioMapper usuarioMapper;
     private final ValidacoesService validacoesService;
@@ -145,27 +147,19 @@ public class UsuarioService {
     }
 
     protected void validarCpfDuplicado(String cpf) {
-        String cpfLimpo = (cpf != null) ? cpf.replaceAll("\\D", "") : null;
-        if (usuarioRepository.existsByCpf(cpfLimpo))
+        if (usuarioLookupHelper.existsByCpf(cpf)) {
             throw new ConflictException("CPF já cadastrado");
+        }
     }
 
     protected void validarEmailDuplicado(String email) {
-        String normalizado = EmailNormalizer.normalize(email);
-        if (normalizado == null) {
-            return;
-        }
-        if (usuarioRepository.existsByEmail(normalizado)) {
+        if (usuarioLookupHelper.existsByEmail(email)) {
             throw new ConflictException("E-mail já cadastrado");
         }
     }
 
     protected void validarEmailDuplicadoExcluindoId(String email, Long id) {
-        String normalizado = EmailNormalizer.normalize(email);
-        if (normalizado == null) {
-            return;
-        }
-        if (usuarioRepository.existsByEmailAndIdNot(normalizado, id)) {
+        if (usuarioLookupHelper.existsByEmailAndIdNot(email, id)) {
             throw new ConflictException("E-mail já cadastrado");
         }
     }

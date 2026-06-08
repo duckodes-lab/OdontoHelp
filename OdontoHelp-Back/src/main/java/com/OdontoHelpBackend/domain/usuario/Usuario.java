@@ -1,6 +1,8 @@
 package com.OdontoHelpBackend.domain.usuario;
 
 import com.OdontoHelpBackend.domain.usuario.enums.PerfilUsuario;
+import com.OdontoHelpBackend.util.SensitiveDataConverter;
+import com.OdontoHelpBackend.util.UsuarioSensitiveListener;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
@@ -17,6 +19,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "TB_USUARIO")
+@EntityListeners(UsuarioSensitiveListener.class)
 @Inheritance(strategy = InheritanceType.JOINED)
 @Getter
 @Setter
@@ -32,20 +35,30 @@ public class Usuario implements UserDetails {
     @Column(name = "NOME", nullable = false, length = 100)
     private String nome;
 
-    @Column(name = "TELEFONE", nullable = false, length = 15)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "telefone_encrypted", nullable = false, length = 512)
     private String telefone;
 
     @Email(message = "E-mail inválido")
-    @Column(name = "EMAIL", unique = true, length = 100)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "email_encrypted", length = 512)
     private String email;
+
+    @Column(name = "email_hash", length = 64)
+    private String emailHash;
 
     @JsonIgnore
     @Column(name = "SENHA")
     private String senha;
 
     @CPF(message = "CPF inválido")
-    @Column(name = "CPF", unique = true, length = 11)
+    @Convert(converter = SensitiveDataConverter.class)
+    @Column(name = "cpf_encrypted", length = 512)
     private String cpf;
+
+    @JsonIgnore
+    @Column(name = "cpf_hash", length = 64)
+    private String cpfHash;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "PERFIL", nullable = false)
@@ -68,6 +81,9 @@ public class Usuario implements UserDetails {
 
     @Column(name = "ONBOARDING_CONCLUIDO", nullable = false)
     private Boolean onboardingConcluido = false;
+
+    @Column(name = "privacy_policy_version", length = 20)
+    private String privacyPolicyVersion;
 
     @OneToOne(mappedBy = "usuario", cascade = CascadeType.ALL)
     private Endereco endereco;

@@ -1,20 +1,22 @@
 package com.OdontoHelpBackend.service.Auth;
 
+import com.OdontoHelpBackend.domain.usuario.Usuario;
+import com.OdontoHelpBackend.domain.usuario.enums.PerfilUsuario;
+import com.OdontoHelpBackend.dto.auth.AuthResponse;
+import com.OdontoHelpBackend.dto.auth.LoginRequest;
+import com.OdontoHelpBackend.dto.auth.RefreshRequest;
+import com.OdontoHelpBackend.dto.auth.UsuarioResumoResponse;
 import com.OdontoHelpBackend.infra.exception.AccountLockedException;
 import com.OdontoHelpBackend.infra.exception.InvalidTokenException;
 import com.OdontoHelpBackend.infra.security.JwtService;
 import com.OdontoHelpBackend.infra.security.token.RefreshToken;
 import com.OdontoHelpBackend.infra.security.token.RefreshTokenRepository;
 import com.OdontoHelpBackend.infra.security.token.TokenBlacklist;
-import com.OdontoHelpBackend.domain.usuario.Usuario;
-import com.OdontoHelpBackend.dto.auth.AuthResponse;
-import com.OdontoHelpBackend.dto.auth.LoginRequest;
-import com.OdontoHelpBackend.dto.auth.RefreshRequest;
-import com.OdontoHelpBackend.dto.auth.UsuarioResumoResponse;
-import com.OdontoHelpBackend.domain.usuario.enums.PerfilUsuario;
-import com.OdontoHelpBackend.repository.Usuario.DentistaRepository;
+import com.OdontoHelpBackend.infra.security.token.TokenHashUtil;
 import com.OdontoHelpBackend.infra.util.EmailNormalizer;
+import com.OdontoHelpBackend.repository.Usuario.DentistaRepository;
 import com.OdontoHelpBackend.repository.Usuario.UsuarioRepository;
+import com.OdontoHelpBackend.util.UsuarioLookupHelper;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -31,6 +33,7 @@ public class AuthService {
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCK_MINUTES = 15;
 
+    private final UsuarioLookupHelper usuarioLookupHelper;
     private final UsuarioRepository usuarioRepository;
     private final DentistaRepository dentistaRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -41,11 +44,12 @@ public class AuthService {
     @Transactional
     public AuthResponse login(LoginRequest request) {
         String email = EmailNormalizer.normalize(request.email());
-        Usuario usuario = usuarioRepository.findByEmail(email)
+        Usuario usuario = usuarioLookupHelper.findByEmail(email)
                 .orElseThrow(() -> new BadCredentialsException("Credenciais inválidas"));
 
-        if (!usuario.getIsAtivo())
+        if (!usuario.getIsAtivo()) {
             throw new BadCredentialsException("Credenciais inválidas");
+        }
 
         verificarBloqueio(usuario);
 
@@ -55,13 +59,14 @@ public class AuthService {
         }
 
         resetarFalhasLogin(usuario);
+        refreshTokenRepository.revogarTodosPorUsuario(usuario.getId());
         return gerarAuthResponse(usuario);
     }
 
     @Transactional
     public AuthResponse refresh(RefreshRequest request) {
         RefreshToken refreshToken = refreshTokenRepository
-                .findByToken(request.refreshToken())
+                .findByTokenHash(TokenHashUtil.hash(request.refreshToken()))
                 .orElseThrow(() -> new InvalidTokenException("Refresh token inválido"));
 
         if (refreshToken.isRevogado() || refreshToken.isExpirado()) {
@@ -76,7 +81,7 @@ public class AuthService {
     @Transactional
     public void logout(Long usuarioId, String accessToken) {
         refreshTokenRepository.revogarTodosPorUsuario(usuarioId);
-                if (accessToken != null) {
+        if (accessToken != null) {
             tokenBlacklist.invalidar(accessToken, jwtService.extrairExpiracao(accessToken));
         }
     }
@@ -91,15 +96,16 @@ public class AuthService {
         String accessToken = jwtService.gerarAccessToken(usuario);
         Long dentistaId = resolverDentistaId(usuario);
 
+        String refreshTokenPlain = jwtService.gerarRefreshToken();
         RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setToken(jwtService.gerarRefreshToken());
+        refreshToken.setTokenHash(TokenHashUtil.hash(refreshTokenPlain));
         refreshToken.setUsuario(usuario);
         refreshToken.setExpiresAt(jwtService.refreshTokenExpiresAt());
         refreshTokenRepository.save(refreshToken);
 
         return new AuthResponse(
                 accessToken,
-                refreshToken.getToken(),
+                refreshTokenPlain,
                 new UsuarioResumoResponse(
                         usuario.getId(),
                         usuario.getNome(),
@@ -112,7 +118,9 @@ public class AuthService {
     }
 
     private Long resolverDentistaId(Usuario usuario) {
-        if (usuario.getPerfil() != PerfilUsuario.DENTISTA) return null;
+        if (usuario.getPerfil() != PerfilUsuario.DENTISTA) {
+            return null;
+        }
         return dentistaRepository.findByUsuarioId(usuario.getId())
                 .map(Usuario::getId)
                 .orElse(null);
@@ -120,7 +128,9 @@ public class AuthService {
 
     private void verificarBloqueio(Usuario usuario) {
         LocalDateTime lockedUntil = usuario.getLockedUntil();
-        if (lockedUntil == null || !lockedUntil.isAfter(LocalDateTime.now())) return;
+        if (lockedUntil == null || !lockedUntil.isAfter(LocalDateTime.now())) {
+            return;
+        }
         long retryAfter = Duration.between(LocalDateTime.now(), lockedUntil).getSeconds();
         throw new AccountLockedException(Math.max(1, retryAfter));
     }

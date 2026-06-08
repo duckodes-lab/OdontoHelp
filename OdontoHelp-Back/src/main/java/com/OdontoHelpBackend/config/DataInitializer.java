@@ -20,6 +20,7 @@ import com.OdontoHelpBackend.repository.Clinico.PlanoDeTratamentoRepository;
 import com.OdontoHelpBackend.repository.Clinico.ProcedimentoRepository;
 import com.OdontoHelpBackend.repository.Consulta.AgendamentoRepository;
 import com.OdontoHelpBackend.repository.Usuario.*;
+import com.OdontoHelpBackend.util.UsuarioLookupHelper;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
@@ -45,6 +46,7 @@ public class DataInitializer implements ApplicationRunner {
     private String adminPassword;
 
     private final UsuarioRepository usuarioRepository;
+    private final UsuarioLookupHelper usuarioLookupHelper;
     private final DentistaRepository dentistaRepository;
     private final PacienteRepository pacienteRepository;
     private final EnderecoRepository enderecoRepository;
@@ -57,7 +59,8 @@ public class DataInitializer implements ApplicationRunner {
 
     private final Random random = new Random();
 
-    public DataInitializer(UsuarioRepository usuarioRepository, DentistaRepository dentistaRepository,
+    public DataInitializer(UsuarioRepository usuarioRepository, UsuarioLookupHelper usuarioLookupHelper,
+                           DentistaRepository dentistaRepository,
                            PacienteRepository pacienteRepository, EnderecoRepository enderecoRepository,
                            AgendamentoRepository agendamentoRepository, ProcedimentoRepository procedimentoRepository,
                            AtendimentoRepository atendimentoRepository,
@@ -65,6 +68,7 @@ public class DataInitializer implements ApplicationRunner {
                            PlanoDeTratamentoRepository planoRepository,
                            PasswordEncoder passwordEncoder) {
         this.usuarioRepository = usuarioRepository;
+        this.usuarioLookupHelper = usuarioLookupHelper;
         this.dentistaRepository = dentistaRepository;
         this.pacienteRepository = pacienteRepository;
         this.enderecoRepository = enderecoRepository;
@@ -90,7 +94,7 @@ public class DataInitializer implements ApplicationRunner {
         criarRecepcionista();
         List<Dentista> dentistas = criarDentistas();
         List<Paciente> pacientes = criarPacientes();
-        Usuario admin = usuarioRepository.findByEmail(adminEmail).orElseThrow();
+        Usuario admin = usuarioLookupHelper.findByEmail(adminEmail).orElseThrow();
         pacientes.forEach(p -> criarSnapshotInicial(p, admin));
 
         List<Procedimento> procedimentos = criarProcedimentos();
@@ -102,12 +106,12 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     private void garantirAdminAtivo() {
-        usuarioRepository.findByEmail(adminEmail)
+        usuarioLookupHelper.findByEmail(adminEmail)
                 .filter(admin -> !Boolean.TRUE.equals(admin.getIsAtivo()))
                 .ifPresent(admin -> {
                     admin.setIsAtivo(true);
                     usuarioRepository.save(admin);
-                    System.out.println("Admin configurado reativado: " + adminEmail);
+                    System.out.println("Admin configurado reativado");
                 });
     }
 

@@ -5,6 +5,7 @@ import com.OdontoHelpBackend.dto.Usuario.Request.Paciente.PacienteAnamneseDTO;
 import com.OdontoHelpBackend.dto.Usuario.Request.Paciente.PacienteObservacaoRequestDTO;
 import com.OdontoHelpBackend.dto.Usuario.Request.Paciente.PacienteRequestDTO;
 import com.OdontoHelpBackend.dto.Usuario.Request.Paciente.PacienteUpdateDTO;
+import com.OdontoHelpBackend.dto.Usuario.Response.Paciente.PacienteDadosPessoaisDTO;
 import com.OdontoHelpBackend.dto.Usuario.Response.Paciente.PacienteObservacaoResponseDTO;
 import com.OdontoHelpBackend.dto.Usuario.Response.Paciente.PacienteResponseDTO;
 import com.OdontoHelpBackend.dto.Usuario.Response.Paciente.PacienteSnapshotFinanceiroDTO;
@@ -89,5 +90,18 @@ public class PacienteController {
             @PathVariable Long id,
             @RequestParam boolean isAtivo) {
         return ResponseEntity.ok(pacienteService.toggleStatus(id, isAtivo));
+    }
+
+    @GetMapping("/{id}/dados-pessoais")
+    public ResponseEntity<PacienteDadosPessoaisDTO> dadosPessoais(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Usuario usuario) {
+        return ResponseEntity.ok(pacienteService.dadosPessoais(id, usuario));
+    }
+
+    @DeleteMapping("/{id}/anonimizar")
+    public ResponseEntity<Void> anonimizar(@PathVariable Long id) {
+        pacienteService.anonimizar(id);
+        return ResponseEntity.noContent().build();
     }
 }
