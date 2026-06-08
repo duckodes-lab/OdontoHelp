@@ -11,7 +11,7 @@ docker ps --format "table {{.Names}}\t{{.Ports}}\t{{.Status}}" 2>/dev/null || ec
 
 echo ""
 echo "=== Verificação rápida ==="
-for port in 8080 5432 5173; do
+for port in 8080 8081 8082 5432 5173; do
   if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
     echo "ATENÇÃO: porta ${port} está em escuta — não deveria estar pública em produção"
   else

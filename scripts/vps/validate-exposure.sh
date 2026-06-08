@@ -15,10 +15,10 @@ fi
 
 echo "=== nmap portas críticas em $IP ==="
 if command -v nmap &>/dev/null; then
-  nmap -p 22,80,443,8080,5432 --open "$IP" || true
+  nmap -p 22,80,443,8080,8081,8082,5432 --open "$IP" || true
 else
   echo "nmap não instalado — testando com bash /dev/tcp"
-  for port in 22 80 443 8080 5432; do
+  for port in 22 80 443 8080 8081 8082 5432; do
     if timeout 2 bash -c "echo >/dev/tcp/$IP/$port" 2>/dev/null; then
       echo "OPEN: $port"
     else
@@ -31,7 +31,7 @@ echo ""
 echo "=== Esperado ==="
 echo "- 80, 443: open"
 echo "- 22: closed/filtered (ou restrito ao seu IP)"
-echo "- 8080, 5432: closed/filtered"
+echo "- 8080, 8081, 8082, 5432: closed/filtered"
 
 if [[ -n "$API_DOMAIN" ]]; then
   echo ""
